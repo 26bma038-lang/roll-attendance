@@ -56,6 +56,7 @@ import app.roll.data.session.ClassData
 import app.roll.domain.attendance.SessionState
 import app.roll.domain.deadlines.Deadlines
 import app.roll.domain.model.Mark
+import app.roll.domain.model.Notice
 import app.roll.feature.common.AttendanceCopy
 import app.roll.feature.common.ClearedMark
 import app.roll.feature.common.MarkClearedSnackbar
@@ -66,6 +67,8 @@ import app.roll.feature.common.sessionItems
 import app.roll.feature.deadlines.DeadlineItem
 import app.roll.feature.deadlines.DeadlineRow
 import app.roll.feature.deadlines.deadlineItem
+import app.roll.feature.notices.PinnedNoticesBlock
+import app.roll.feature.notices.pinnedNotices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -90,6 +93,7 @@ data class TodayUiState(
     /** Set when the class has no CR yet, e.g. "MA 2026". */
     val noCrClassName: String? = null,
     val dueSoon: List<DeadlineItem> = emptyList(),
+    val pinnedNotices: List<Notice> = emptyList(),
 )
 
 @HiltViewModel
@@ -150,8 +154,12 @@ class TodayViewModel @Inject constructor(
         Deadlines.dueSoon(assignments.orEmpty(), doneIds, now).map { deadlineItem(it, subjectMap, doneIds, now, zone) }
     }
 
-    val uiState: StateFlow<TodayUiState> = combine(content, refreshing, controller.cleared, dueSoon) { state, isRefreshing, cleared, soon ->
-        state.copy(refreshing = isRefreshing, clearedMark = cleared, dueSoon = soon)
+    private val pinned = combine(classData.classNotices, classData.collegeNotices, time.ticks()) { classList, collegeList, now ->
+        pinnedNotices(classList.orEmpty(), collegeList.orEmpty(), now)
+    }
+
+    val uiState: StateFlow<TodayUiState> = combine(content, refreshing, controller.cleared, dueSoon, pinned) { state, isRefreshing, cleared, soon, notices ->
+        state.copy(refreshing = isRefreshing, clearedMark = cleared, dueSoon = soon, pinnedNotices = notices)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
     fun onMark(item: SessionItem, mark: Mark?) {
@@ -242,6 +250,9 @@ fun TodayScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 val date = uiState.date
+                if (uiState.pinnedNotices.isNotEmpty()) {
+                    item(key = "notices") { PinnedNoticesBlock(uiState.pinnedNotices) }
+                }
                 if (uiState.yesterdayUnmarked > 0 && date != null) {
                     item(key = "yesterday") {
                         YesterdayRow(count = uiState.yesterdayUnmarked, onClick = { onOpenDay(date.minusDays(1)) })

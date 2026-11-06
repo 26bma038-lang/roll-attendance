@@ -38,6 +38,7 @@ import app.roll.feature.manage.ManageRoute
 import app.roll.feature.manage.ManageSubjectsRoute
 import app.roll.feature.manage.SessionDetailRoute
 import app.roll.feature.manage.TimetableRoute
+import app.roll.feature.notices.CollegeNoticesRoute
 import app.roll.feature.settings.SettingsRoute
 import app.roll.feature.subjects.SubjectDetailRoute
 import app.roll.feature.subjects.SubjectsRoute
@@ -61,6 +62,7 @@ import java.time.LocalDate
 @Serializable data class AdminClassDest(val classId: String)
 @Serializable data object AdminDepartmentsDest
 @Serializable data class AdminDepartmentDest(val code: String)
+@Serializable data object CollegeNoticesDest
 
 /** Today · Deadlines · Subjects · Department, plus Manage for CRs. History lives in Subjects. */
 private enum class Tab(val label: String, val icon: Int) {
@@ -110,7 +112,7 @@ fun RollNavHost(
                     onBack = back,
                     onOpenClass = { navController.navigate(AdminClassDest(it)) },
                     onOpenDepartments = { navController.navigate(AdminDepartmentsDest) },
-                    onOpenCollegeNotices = {},
+                    onOpenCollegeNotices = { navController.navigate(CollegeNoticesDest) },
                 )
             }
         }
@@ -119,6 +121,7 @@ fun RollNavHost(
             Screen { AdminDepartmentsScreen(onBack = back, onOpen = { navController.navigate(AdminDepartmentDest(it)) }) }
         }
         composable<AdminDepartmentDest> { Screen { AdminDepartmentRoute(onBack = back) } }
+        composable<CollegeNoticesDest> { Screen { CollegeNoticesRoute(onBack = back) } }
     }
 }
 

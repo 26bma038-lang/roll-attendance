@@ -43,6 +43,9 @@ import app.roll.feature.deadlines.AssignmentDetailUiState
 import app.roll.feature.deadlines.DeadlinesScreen
 import app.roll.feature.deadlines.DeadlinesUiState
 import app.roll.feature.deadlines.deadlineItem
+import app.roll.domain.model.Notice
+import app.roll.feature.notices.CollegeNoticesScreen
+import app.roll.feature.notices.CollegeNoticesUiState
 import app.roll.feature.auth.SignInScreen
 import app.roll.feature.auth.SignInUiState
 import app.roll.feature.common.sessionItems
@@ -373,6 +376,24 @@ class ScreensScreenshotTest {
             todayState().copy(dueSoon = Deadlines.dueSoon(assignments, done, nowInstant).map { deadlineItem(it, subjectMap, done, nowInstant, zoneIst) }),
             { _, _ -> }, {}, {}, {},
         )
+    }
+
+    private val sampleNotices = listOf(
+        Notice("n1", "Mid-sem timetable is out on the notice board outside the department office.", pinned = true, createdAt = nowInstant.minusSeconds(7200), expiresAt = null, createdByName = "Admin", college = true),
+        Notice("n2", "DAA lab moves to Lab 3 this week.", pinned = true, createdAt = nowInstant.minusSeconds(86_400), expiresAt = nowInstant.plusSeconds(3 * 86_400), createdByName = "Sahil Verma", college = false),
+        Notice("n3", "Bring your ID cards for the industrial visit on Monday.", pinned = false, createdAt = nowInstant.minusSeconds(2 * 86_400), expiresAt = null, createdByName = "Sahil Verma", college = false),
+    )
+
+    @Test fun todayNotices_dark() = shot("19_today_notices_dark", dark = true, tabs = true) {
+        TodayScreen(todayState().copy(pinnedNotices = sampleNotices.filter { it.pinned }), { _, _ -> }, {}, {}, {})
+    }
+
+    @Test fun departmentNotices_light() = shot("20_department_notices_light", tabs = true, selected = 3) {
+        DepartmentScreen(departmentState().copy(notices = sampleNotices, canPostNotices = true), {})
+    }
+
+    @Test fun collegeNotices_light() = shot("21_college_notices_light") {
+        CollegeNoticesScreen(CollegeNoticesUiState(sampleNotices.filter { it.college }, today), {}, {}, { _, _ -> }, {})
     }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }

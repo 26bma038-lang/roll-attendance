@@ -8,12 +8,14 @@ import app.roll.data.classes.ClassRepository
 import app.roll.data.classes.ClassResult
 import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
+import app.roll.data.notices.NoticeRepository
 import app.roll.data.profile.ProfileRepository
 import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.schedule.SessionsSnapshot
 import app.roll.domain.college.NithConfig
 import app.roll.domain.college.NithIdentity
 import app.roll.domain.model.Assignment
+import app.roll.domain.model.Notice
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Subject
 import app.roll.domain.model.TimetableSlot
@@ -165,6 +167,7 @@ class ClassData @Inject constructor(
     schedule: ScheduleRepository,
     marks: MarkRepository,
     assignments: AssignmentRepository,
+    notices: NoticeRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val keys: Flow<Pair<String, String>?> = session.state
@@ -182,4 +185,6 @@ class ClassData @Inject constructor(
     val assignments: StateFlow<List<Assignment>?> = perClass { classId, _ -> assignments.observe(classId) }
     /** Ids of assignments the student ticked done. Private to them. */
     val doneIds: StateFlow<Set<String>?> = perClass { _, uid -> assignments.observeDone(uid) }
+    val classNotices: StateFlow<List<Notice>?> = perClass { classId, _ -> notices.observeClass(classId) }
+    val collegeNotices: StateFlow<List<Notice>?> = perClass { _, _ -> notices.observeCollege() }
 }

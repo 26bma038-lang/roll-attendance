@@ -9,6 +9,8 @@ import app.roll.data.classes.ClassRepository
 import app.roll.data.classes.ClassResult
 import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
+import app.roll.data.notices.NoticeDraft
+import app.roll.data.notices.NoticeRepository
 import app.roll.data.profile.ProfileRepository
 import app.roll.data.profile.ProfileSnapshot
 import app.roll.data.schedule.ScheduleRepository
@@ -19,6 +21,7 @@ import app.roll.domain.model.Mark
 import app.roll.domain.model.MarkRecord
 import app.roll.domain.model.Member
 import app.roll.domain.model.MemberMark
+import app.roll.domain.model.Notice
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Session
 import app.roll.domain.model.Subject
@@ -126,4 +129,14 @@ class FakeAssignmentRepository(assignments: List<Assignment> = emptyList()) : As
     override fun setDone(uid: String, assignmentId: String, done: Boolean) {
         this.done.value = if (done) this.done.value + assignmentId else this.done.value - assignmentId
     }
+}
+
+class FakeNoticeRepository : NoticeRepository {
+    val classNotices = MutableStateFlow<List<Notice>>(emptyList())
+    val collegeNotices = MutableStateFlow<List<Notice>>(emptyList())
+    override fun observeClass(classId: String): Flow<List<Notice>> = classNotices
+    override fun observeCollege(): Flow<List<Notice>> = collegeNotices
+    override fun post(classId: String?, draft: NoticeDraft, authorName: String) = Unit
+    override fun setPinned(classId: String?, notice: Notice, pinned: Boolean) = Unit
+    override fun delete(classId: String?, notice: Notice) = Unit
 }

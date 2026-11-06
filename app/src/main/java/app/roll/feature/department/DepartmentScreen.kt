@@ -22,6 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +44,7 @@ import app.roll.core.common.TimeSource
 import app.roll.core.common.localDateTimeIn
 import app.roll.core.designsystem.component.HairlineDivider
 import app.roll.core.designsystem.component.ListGroup
+import app.roll.core.designsystem.component.RollBottomSheet
 import app.roll.core.designsystem.component.RollIconButton
 import app.roll.core.designsystem.component.RollTopAppBar
 import app.roll.core.designsystem.component.SectionHeader
@@ -54,7 +58,10 @@ import app.roll.core.designsystem.theme.Spacing
 import app.roll.core.util.formatClock
 import app.roll.core.util.openUrl
 import app.roll.data.college.DepartmentRepository
+import app.roll.data.notices.NoticeDraft
+import app.roll.data.notices.NoticeRepository
 import app.roll.data.session.AppSession
+import app.roll.data.session.ClassContext
 import app.roll.data.session.ClassData
 import app.roll.domain.attendance.AttendanceCalculator
 import app.roll.domain.college.NithConfig
@@ -66,6 +73,10 @@ import app.roll.domain.model.SessionType
 import app.roll.domain.model.Subject
 import app.roll.domain.model.TimetableSlot
 import app.roll.feature.common.AttendanceCopy
+import app.roll.feature.notices.NoticeActionsDialog
+import app.roll.feature.notices.NoticeEditor
+import app.roll.feature.notices.NoticesSection
+import app.roll.feature.notices.activeNotices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -87,6 +98,7 @@ data class DepartmentUiState(
     /** Classes that have happened this semester (scheduled and over). No attendance averages: privacy. */
     val classesHeld: Int = 0,
     val notices: List<Notice> = emptyList(),
+    val canPostNotices: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -96,11 +108,17 @@ class DepartmentViewModel @Inject constructor(
     classData: ClassData,
     departments: DepartmentRepository,
     time: TimeSource,
+    private val notices: NoticeRepository,
 ) : ViewModel() {
+    private val context: StateFlow<ClassContext?> = session.context.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val noticeList = combine(classData.classNotices, classData.collegeNotices, time.ticks()) { classList, collegeList, now ->
+        activeNotices(classList.orEmpty(), collegeList.orEmpty(), now)
+    }
     private val department = session.context.map { it.rollClass.branch }.distinctUntilChanged()
         .flatMapLatest { departments.observe(it) }
 
-    val uiState: StateFlow<DepartmentUiState> = combine(
+    private val base = combine(
         combine(session.context, time.ticks()) { ctx, now -> ctx to now.localDateTimeIn(ctx.rollClass.timezone) },
         classData.timetable,
         classData.subjects,
@@ -116,18 +134,42 @@ class DepartmentViewModel @Inject constructor(
             classesHeld = sessions?.sessions.orEmpty().count {
                 it.status == SessionStatus.Scheduled && AttendanceCalculator.isOver(it, now)
             },
+            canPostNotices = ctx.isCR || ctx.isAdmin,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DepartmentUiState())
+    }
+
+    val uiState: StateFlow<DepartmentUiState> = combine(base, noticeList) { state, list -> state.copy(notices = list) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DepartmentUiState())
+
+    fun postNotice(draft: NoticeDraft) {
+        val ctx = context.value ?: return
+        if (ctx.isCR || ctx.isAdmin) notices.post(ctx.classId, draft, ctx.profile.name)
+    }
+
+    fun setPinned(notice: Notice, pinned: Boolean) {
+        val ctx = context.value ?: return
+        notices.setPinned(ctx.classId, notice, pinned)
+    }
+
+    fun deleteNotice(notice: Notice) {
+        val ctx = context.value ?: return
+        notices.delete(ctx.classId, notice)
+    }
 }
 
 @Composable
 fun DepartmentRoute(
     onOpenSettings: () -> Unit,
-    noticesSection: @Composable () -> Unit = {},
     viewModel: DepartmentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    DepartmentScreen(uiState, onOpenSettings, noticesSection)
+    DepartmentScreen(
+        uiState = uiState,
+        onOpenSettings = onOpenSettings,
+        onPostNotice = viewModel::postNotice,
+        onPinNotice = viewModel::setPinned,
+        onDeleteNotice = viewModel::deleteNotice,
+    )
 }
 
 private val WeekdayNames = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
@@ -136,10 +178,14 @@ private val WeekdayNames = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 fun DepartmentScreen(
     uiState: DepartmentUiState,
     onOpenSettings: () -> Unit,
-    noticesSection: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
+    onPostNotice: (NoticeDraft) -> Unit = {},
+    onPinNotice: (Notice, Boolean) -> Unit = { _, _ -> },
+    onDeleteNotice: (Notice) -> Unit = {},
 ) {
     val colors = RollTheme.colors
+    var writing by rememberSaveable { mutableStateOf(false) }
+    var selectedNoticeId by rememberSaveable { mutableStateOf<String?>(null) }
     val rollClass = uiState.rollClass
     val subjectMap = uiState.subjects.associateBy { it.id }
     Column(modifier.fillMaxSize()) {
@@ -180,7 +226,14 @@ fun DepartmentScreen(
                     )
                 }
             }
-            item(key = "notices") { noticesSection() }
+            item(key = "notices") {
+                NoticesSection(
+                    notices = uiState.notices,
+                    canPost = uiState.canPostNotices,
+                    onPost = { writing = true },
+                    onSelect = { selectedNoticeId = it.id },
+                )
+            }
             item(key = "week") {
                 SectionHeader("This week")
                 WeekTimetable(uiState.slots, subjectMap, uiState.today)
@@ -194,6 +247,29 @@ fun DepartmentScreen(
                 DepartmentInfo(uiState.department)
             }
         }
+    }
+
+    if (writing) {
+        RollBottomSheet(onDismiss = { writing = false }) {
+            NoticeEditor(title = "Class notice", today = uiState.today) {
+                onPostNotice(it)
+                writing = false
+            }
+        }
+    }
+    uiState.notices.firstOrNull { it.id == selectedNoticeId }?.let { notice ->
+        NoticeActionsDialog(
+            notice = notice,
+            onPin = {
+                onPinNotice(notice, it)
+                selectedNoticeId = null
+            },
+            onDelete = {
+                onDeleteNotice(notice)
+                selectedNoticeId = null
+            },
+            onDismiss = { selectedNoticeId = null },
+        )
     }
 }
 

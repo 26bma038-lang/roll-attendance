@@ -3,7 +3,7 @@ package app.roll.core.util
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 
 /**
  * Opens a web link in the browser. Adds https:// when the scheme is missing.
@@ -14,7 +14,7 @@ fun Context.openUrl(url: String): Boolean {
     if (trimmed.isEmpty()) return false
     val withScheme = if ("://" in trimmed || trimmed.startsWith("mailto:") || trimmed.startsWith("tel:")) trimmed else "https://$trimmed"
     return try {
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(withScheme)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(Intent(Intent.ACTION_VIEW, withScheme.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
     } catch (_: ActivityNotFoundException) {
         false

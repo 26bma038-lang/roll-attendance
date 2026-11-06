@@ -11,23 +11,17 @@ object RollIcons {
     @DrawableRes val Manage = R.drawable.ic_tune
     @DrawableRes val Settings = R.drawable.ic_settings
     @DrawableRes val Add = R.drawable.ic_add
-    @DrawableRes val Close = R.drawable.ic_close
     @DrawableRes val Check = R.drawable.ic_check
-    @DrawableRes val Copy = R.drawable.ic_content_copy
-    @DrawableRes val Share = R.drawable.ic_share
     @DrawableRes val Back = R.drawable.ic_arrow_back
     @DrawableRes val ChevronLeft = R.drawable.ic_chevron_left
     @DrawableRes val ChevronRight = R.drawable.ic_chevron_right
     @DrawableRes val Offline = R.drawable.ic_cloud_off
-    @DrawableRes val More = R.drawable.ic_more_vert
     @DrawableRes val Delete = R.drawable.ic_delete
     @DrawableRes val Edit = R.drawable.ic_edit
     @DrawableRes val Remove = R.drawable.ic_remove
     @DrawableRes val ExpandMore = R.drawable.ic_expand_more
-    @DrawableRes val RemoveMember = R.drawable.ic_person_remove
     @DrawableRes val Deadlines = R.drawable.ic_assignment
     @DrawableRes val Department = R.drawable.ic_account_balance
     @DrawableRes val Admin = R.drawable.ic_admin_panel_settings
-    @DrawableRes val Search = R.drawable.ic_search
     @DrawableRes val OpenExternal = R.drawable.ic_open_in_new
 }

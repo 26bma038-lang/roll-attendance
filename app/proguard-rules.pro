@@ -21,3 +21,6 @@
 
 # Google ID token credential is created from a Bundle by class name.
 -keep class com.google.android.libraries.identity.googleid.** { *; }
+
+# Glance creates widget action callbacks by class name.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

@@ -100,12 +100,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun leaveClass() {
-        val ctx = context.value ?: return
-        if (ctx.isCR) return
-        classes.leaveClass(ctx.uid, ctx.classId)
-    }
-
     fun signOut() {
         viewModelScope.launch {
             google.clearState()
@@ -117,7 +111,7 @@ class SettingsViewModel @Inject constructor(
     fun deleteAccount(activityContext: Context) {
         val ctx = context.value ?: return
         if (ctx.isCR) {
-            messages.show("Transfer the CR role before deleting your account.")
+            messages.show("Ask the admin to remove your CR role before deleting your account.")
             return
         }
         viewModelScope.launch {
@@ -141,12 +135,12 @@ class SettingsViewModel @Inject constructor(
     }
 }
 
-private enum class SettingsDialog { None, ReminderTime, Leave, LeaveBlocked, SignOut, Delete }
+private enum class SettingsDialog { None, ReminderTime, SignOut, Delete }
 
 @Composable
 fun SettingsRoute(
     onBack: () -> Unit,
-    onOpenClassSettings: () -> Unit,
+    onOpenAdmin: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -156,10 +150,9 @@ fun SettingsRoute(
         onBack = onBack,
         onTheme = viewModel::setTheme,
         onReminder = viewModel::setReminder,
-        onLeave = viewModel::leaveClass,
         onSignOut = viewModel::signOut,
         onDelete = { viewModel.deleteAccount(context) },
-        onOpenClassSettings = onOpenClassSettings,
+        onOpenAdmin = onOpenAdmin,
     )
 }
 
@@ -169,10 +162,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onReminder: (ReminderSettings) -> Unit,
-    onLeave: () -> Unit,
     onSignOut: () -> Unit,
     onDelete: () -> Unit,
-    onOpenClassSettings: () -> Unit,
+    onOpenAdmin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = RollTheme.colors
@@ -261,22 +253,18 @@ fun SettingsScreen(
                 }
             }
 
-            SectionHeader("Class")
-            ListGroup {
-                ListRow(
-                    title = "Leave ${uiState.context?.rollClass?.name ?: "class"}",
-                    subtitle = if (isCR) "Transfer the CR role first" else null,
-                    titleColor = colors.warning,
-                    showChevron = false,
-                    onClick = { dialog = if (isCR) SettingsDialog.LeaveBlocked else SettingsDialog.Leave },
-                )
+            if (uiState.context?.isAdmin == true) {
+                SectionHeader("Admin")
+                ListGroup {
+                    ListRow(title = "Admin panel", subtitle = "CRs, departments, college notices", onClick = onOpenAdmin)
+                }
             }
 
             SectionHeader("Account")
             ListGroup {
                 ListRow(
                     title = "Sign out",
-                    subtitle = uiState.context?.profile?.email,
+                    subtitle = uiState.context?.let { "${it.profile.email} · ${it.identity.rollNo}" },
                     showChevron = false,
                     onClick = { dialog = SettingsDialog.SignOut },
                 )
@@ -310,27 +298,6 @@ fun SettingsScreen(
             },
             onDismiss = { dialog = SettingsDialog.None },
         )
-        SettingsDialog.Leave -> RollDialog(
-            title = "Leave ${uiState.context?.rollClass?.name}?",
-            text = "Your marks stay with the class. You can rejoin with the code.",
-            confirmLabel = "Leave",
-            destructive = true,
-            onConfirm = {
-                dialog = SettingsDialog.None
-                onLeave()
-            },
-            onDismiss = { dialog = SettingsDialog.None },
-        )
-        SettingsDialog.LeaveBlocked -> RollDialog(
-            title = "Transfer the CR role first",
-            text = "A class always needs a CR. Hand the role to another member in Class settings, then leave.",
-            confirmLabel = "Class settings",
-            onConfirm = {
-                dialog = SettingsDialog.None
-                onOpenClassSettings()
-            },
-            onDismiss = { dialog = SettingsDialog.None },
-        )
         SettingsDialog.SignOut -> RollDialog(
             title = "Sign out?",
             text = "Marks you made offline and haven't synced yet may be lost.",
@@ -344,15 +311,15 @@ fun SettingsScreen(
         SettingsDialog.Delete -> RollDialog(
             title = "Delete your account?",
             text = if (isCR) {
-                "Transfer the CR role first. A class always needs a CR."
+                "Ask the admin to remove your CR role first."
             } else {
-                "This removes your profile and takes you out of the class. You'll confirm with Google first. This can't be undone."
+                "This removes your profile and takes you out of ${uiState.context?.rollClass?.name ?: "your class"}. Your marks stay with the class. You'll confirm with Google first. This can't be undone."
             },
-            confirmLabel = if (isCR) "Class settings" else "Delete account",
+            confirmLabel = if (isCR) "OK" else "Delete account",
             destructive = !isCR,
             onConfirm = {
                 dialog = SettingsDialog.None
-                if (isCR) onOpenClassSettings() else onDelete()
+                if (!isCR) onDelete()
             },
             onDismiss = { dialog = SettingsDialog.None },
         )

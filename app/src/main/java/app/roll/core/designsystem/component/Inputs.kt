@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
@@ -34,11 +33,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.roll.core.designsystem.icon.RollIcons
@@ -48,7 +44,6 @@ import app.roll.core.designsystem.theme.RollShapes
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.core.designsystem.theme.Sizes
 import app.roll.core.designsystem.theme.Spacing
-import app.roll.domain.JoinCode
 
 /** Label above, field below, optional supporting line. 10dp corners, accent focus border. */
 @Composable
@@ -105,60 +100,6 @@ fun RollTextField(
             )
         }
     }
-}
-
-/**
- * Six boxes for a join code, backed by one text field so paste and the keyboard work.
- * Uppercases and drops characters that can't appear in a code (0, O, 1, I).
- */
-@Composable
-fun CodeInput(
-    code: String,
-    onCodeChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    onDone: () -> Unit = {},
-) {
-    val colors = RollTheme.colors
-    BasicTextField(
-        value = TextFieldValue(code, selection = TextRange(code.length)),
-        onValueChange = { onCodeChange(JoinCode.normalize(it.text)) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Characters,
-            keyboardType = KeyboardType.Ascii,
-            autoCorrectEnabled = false,
-            imeAction = ImeAction.Done,
-        ),
-        keyboardActions = KeyboardActions(onDone = { onDone() }),
-        modifier = modifier.semantics { contentDescription = "Join code, 6 characters" },
-        decorationBox = {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                repeat(JoinCode.LENGTH) { index ->
-                    val char = code.getOrNull(index)
-                    val active = index == code.length || (index == JoinCode.LENGTH - 1 && code.length == JoinCode.LENGTH)
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .sizeIn(minWidth = 44.dp, minHeight = 52.dp)
-                            .clip(RollShapes.small)
-                            .background(colors.surface)
-                            .border(
-                                width = if (active) 2.dp else 1.dp,
-                                color = if (active) colors.accent else colors.outline,
-                                shape = RollShapes.small,
-                            ),
-                    ) {
-                        Text(
-                            text = char?.toString() ?: "",
-                            style = RollTheme.typography.code.copy(fontSize = RollTheme.typography.title.fontSize),
-                            color = colors.ink,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-        },
-    )
 }
 
 /**
@@ -294,7 +235,6 @@ private fun InputsPreview() {
         ) {
             RollTextField(value = "Sahil", onValueChange = {}, label = "Name")
             RollTextField(value = "", onValueChange = {}, label = "Roll number", supporting = "As on your ID card", mono = true)
-            CodeInput(code = "K7M", onCodeChange = {})
             ChoiceRow(
                 options = listOf("Lecture", "Lab", "Tutorial"),
                 selected = "Lab",

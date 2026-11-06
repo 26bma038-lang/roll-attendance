@@ -6,9 +6,7 @@ import app.roll.data.firebase.reportFailure
 import app.roll.data.firebase.snapshots
 import app.roll.data.firebase.toUserProfile
 import app.roll.domain.model.UserProfile
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -24,10 +22,8 @@ data class ProfileSnapshot(
 interface ProfileRepository {
     fun observe(uid: String): Flow<ProfileSnapshot>
 
-    /** Creates or updates name and roll number; also updates the class member doc if any. */
-    fun saveProfile(uid: String, name: String, rollNo: String, email: String, isNew: Boolean, classId: String?)
-
-    fun clearClassId(uid: String)
+    /** Only the name is editable; roll number, batch and branch come from the email. */
+    fun updateName(uid: String, name: String, classId: String?)
 
     suspend fun deleteProfile(uid: String)
 }
@@ -43,29 +39,13 @@ class FirestoreProfileRepository @Inject constructor(
     override fun observe(uid: String): Flow<ProfileSnapshot> =
         userDoc(uid).snapshots().map { ProfileSnapshot(it.toUserProfile(), it.metadata.isFromCache) }
 
-    override fun saveProfile(uid: String, name: String, rollNo: String, email: String, isNew: Boolean, classId: String?) {
+    override fun updateName(uid: String, name: String, classId: String?) {
         val batch = firestore.batch()
-        val data = buildMap<String, Any?> {
-            put("name", name)
-            put("rollNo", rollNo)
-            put("email", email)
-            if (isNew) {
-                put(F.CLASS_ID, null)
-                put("createdAt", FieldValue.serverTimestamp())
-            }
-        }
-        batch.set(userDoc(uid), data, SetOptions.merge())
+        batch.update(userDoc(uid), "name", name)
         if (classId != null) {
-            batch.update(
-                firestore.collection(F.CLASSES).document(classId).collection(F.MEMBERS).document(uid),
-                mapOf("name" to name, "rollNo" to rollNo),
-            )
+            batch.update(firestore.collection(F.CLASSES).document(classId).collection(F.MEMBERS).document(uid), "name", name)
         }
-        batch.commit().reportFailure { messages.show("Couldn't save your profile. Try again.") }
-    }
-
-    override fun clearClassId(uid: String) {
-        userDoc(uid).update(F.CLASS_ID, null).reportFailure { }
+        batch.commit().reportFailure { messages.show("Couldn't save your name. Try again.") }
     }
 
     override suspend fun deleteProfile(uid: String) {

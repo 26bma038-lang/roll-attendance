@@ -58,6 +58,7 @@ private enum class Tab(val label: String, val icon: Int) {
 @Composable
 fun RollNavHost(
     isCR: Boolean,
+    isAdmin: Boolean,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
@@ -95,7 +96,7 @@ fun RollNavHost(
             Screen {
                 SettingsRoute(
                     onBack = navController::popBackStack,
-                    onOpenClassSettings = { navController.navigate(ClassSettingsDest) },
+                    onOpenAdmin = {},
                 )
             }
         }

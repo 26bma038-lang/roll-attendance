@@ -25,13 +25,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- roll://join/K7MP2X opens the join flow with the code filled in. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="roll" android:host="join" />
-            </intent-filter>
         </activity>
 
         <!-- WorkManager uses Hilt's worker factory, provided by RollApplication. -->

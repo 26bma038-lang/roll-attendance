@@ -5,13 +5,13 @@ import app.roll.data.auth.AuthRepository
 import app.roll.data.auth.AuthUser
 import app.roll.data.classes.ClassRepository
 import app.roll.data.classes.ClassResult
-import app.roll.data.classes.JoinResult
 import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
 import app.roll.data.profile.ProfileRepository
 import app.roll.data.profile.ProfileSnapshot
 import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.schedule.SessionsSnapshot
+import app.roll.domain.college.NithIdentity
 import app.roll.domain.model.Mark
 import app.roll.domain.model.MarkRecord
 import app.roll.domain.model.Member
@@ -49,11 +49,8 @@ class FakeAuthRepository(user: AuthUser?) : AuthRepository {
 class FakeProfileRepository(profile: UserProfile?) : ProfileRepository {
     val profile = MutableStateFlow(profile)
     override fun observe(uid: String): Flow<ProfileSnapshot> = profile.map { ProfileSnapshot(it, fromCache = false) }
-    override fun saveProfile(uid: String, name: String, rollNo: String, email: String, isNew: Boolean, classId: String?) {
-        profile.value = UserProfile(uid, name, rollNo, email, classId)
-    }
-    override fun clearClassId(uid: String) {
-        profile.value = profile.value?.copy(classId = null)
+    override fun updateName(uid: String, name: String, classId: String?) {
+        profile.value = profile.value?.copy(name = name)
     }
     override suspend fun deleteProfile(uid: String) {
         profile.value = null
@@ -65,14 +62,13 @@ class FakeClassRepository(rollClass: RollClass) : ClassRepository {
     val members = MutableStateFlow<List<Member>>(emptyList())
     override fun observeClass(classId: String): Flow<ClassResult> = this.rollClass.map { ClassResult.Loaded(it, false) }
     override fun observeMembers(classId: String): Flow<List<Member>> = members
-    override suspend fun createClass(profile: UserProfile, name: String, semester: String, requiredPercent: Int) = rollClass.value
-    override suspend fun joinClass(profile: UserProfile, code: String): JoinResult = JoinResult.Joined(rollClass.value.id)
-    override fun leaveClass(uid: String, classId: String) = Unit
-    override suspend fun deleteMembership(uid: String, classId: String) = Unit
-    override fun removeMember(classId: String, uid: String) = Unit
-    override fun transferCr(classId: String, newCrUid: String) = Unit
+    override suspend fun joinOwnClass(uid: String, identity: NithIdentity, name: String, today: LocalDate) = Unit
     override fun updateSettings(classId: String, name: String, semester: String, requiredPercent: Int) = Unit
-    override suspend fun regenerateJoinCode(rollClass: RollClass) = "ABCDEF"
+    override fun observeAllClasses(): Flow<List<RollClass>> = this.rollClass.map { listOf(it) }
+    override fun setCRs(classId: String, crUids: List<String>, crNames: List<String>) {
+        rollClass.value = rollClass.value.copy(crUids = crUids, crNames = crNames)
+    }
+    override suspend fun deleteMembership(uid: String, classId: String) = Unit
 }
 
 class FakeScheduleRepository(sessions: List<Session>, subjects: List<Subject>) : ScheduleRepository {

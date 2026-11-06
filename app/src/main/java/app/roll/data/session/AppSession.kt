@@ -10,6 +10,8 @@ import app.roll.data.marks.MyMarks
 import app.roll.data.profile.ProfileRepository
 import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.schedule.SessionsSnapshot
+import app.roll.domain.college.NithConfig
+import app.roll.domain.college.NithIdentity
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Subject
 import app.roll.domain.model.TimetableSlot
@@ -22,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -33,22 +34,31 @@ import kotlinx.coroutines.flow.transformLatest
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Who is using the app, in which class, and whether they are its CR. */
+/** Who is using the app, in which class, and what they may do there. */
 data class ClassContext(
     val uid: String,
     val profile: UserProfile,
     val rollClass: RollClass,
+    val identity: NithIdentity,
+    val isAdmin: Boolean,
 ) {
-    val isCR: Boolean get() = rollClass.crUid == uid
+    val isCR: Boolean get() = rollClass.isCR(uid)
     val classId: String get() = rollClass.id
 }
 
-/** Where the user is in the sign-in → profile → class flow. */
+/** Why a signed-in account was turned away. */
+sealed interface Rejection {
+    val email: String
+
+    data class WrongDomain(override val email: String) : Rejection
+    data class UnsupportedBranch(override val email: String) : Rejection
+}
+
+/** Where the user is in the sign-in → confirm profile → class flow. */
 sealed interface AppState {
     data object Loading : AppState
     data object SignedOut : AppState
-    data class NeedsProfile(val user: AuthUser, val existing: UserProfile?) : AppState
-    data class NeedsClass(val profile: UserProfile, val lostAccess: Boolean) : AppState
+    data class NeedsProfile(val user: AuthUser, val identity: NithIdentity, val existing: UserProfile?) : AppState
     data class Ready(val context: ClassContext) : AppState
 }
 
@@ -63,62 +73,81 @@ class AppSession @Inject constructor(
     private val classes: ClassRepository,
     @ApplicationScope scope: CoroutineScope,
 ) {
-    private val lostAccess = MutableStateFlow(false)
+    private val _rejection = MutableStateFlow<Rejection?>(null)
 
-    private val rawState: Flow<AppState> = auth.authUser.flatMapLatest { user ->
-        if (user == null) flowOf(AppState.SignedOut) else profileState(user)
-    }
+    /** Set when the last sign-in used an account Roll doesn't accept; shown on the sign-in screen. */
+    val rejection: StateFlow<Rejection?> = _rejection.asStateFlow()
 
-    val state: StateFlow<AppState> = combine(rawState, lostAccess) { state, lost ->
-        if (state is AppState.NeedsClass) state.copy(lostAccess = lost) else state
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), AppState.Loading)
+    val state: StateFlow<AppState> = auth.authUser
+        .flatMapLatest { user -> if (user == null) flowOf(AppState.SignedOut) else stateFor(user) }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AppState.Loading)
 
-    /** The current class context, or nothing while signed out / onboarding. */
+    /** The current class context, or nothing while signed out / confirming the profile. */
     val context: Flow<ClassContext> = state
         .map { (it as? AppState.Ready)?.context }
         .filterNotNull()
         .distinctUntilChanged()
 
-    fun acknowledgeLostAccess() {
-        lostAccess.value = false
+    fun clearRejection() {
+        _rejection.value = null
     }
 
-    private fun profileState(user: AuthUser): Flow<AppState> =
+    private fun stateFor(user: AuthUser): Flow<AppState> {
+        val identity = when (val parsed = NithConfig.parse(user.email)) {
+            is NithConfig.Parsed.Student -> parsed.identity
+            NithConfig.Parsed.WrongDomain -> return reject(Rejection.WrongDomain(user.email))
+            NithConfig.Parsed.Unsupported -> return reject(Rejection.UnsupportedBranch(user.email))
+        }
+        _rejection.value = null
+        return profileState(user, identity)
+    }
+
+    /** Signs straight back out: only @nith.ac.in students of supported branches may use Roll. */
+    private fun reject(rejection: Rejection): Flow<AppState> {
+        _rejection.value = rejection
+        auth.signOut()
+        return flowOf(AppState.SignedOut)
+    }
+
+    private fun profileState(user: AuthUser, identity: NithIdentity): Flow<AppState> =
         profiles.observe(user.uid).transformLatest { snapshot ->
             val profile = snapshot.profile
             when {
                 profile == null && snapshot.fromCache -> {
-                    // New device, nothing cached yet: give the server a moment before
-                    // asking a returning user to fill in their profile again.
+                    // New device, nothing cached yet: give the server a moment before asking
+                    // a returning student to confirm their profile again.
                     emit(AppState.Loading)
                     delay(CACHE_GRACE_MILLIS)
-                    emit(AppState.NeedsProfile(user, null))
+                    emit(AppState.NeedsProfile(user, identity, null))
                 }
-                profile == null || !profile.isComplete -> emit(AppState.NeedsProfile(user, profile))
-                profile.classId == null -> emit(AppState.NeedsClass(profile, lostAccess = false))
-                else -> {
-                    lostAccess.value = false
-                    classState(profile, profile.classId).collect { emit(it) }
-                }
+                profile == null || !profile.isComplete -> emit(AppState.NeedsProfile(user, identity, profile))
+                else -> classState(user, identity, profile).collect { emit(it) }
             }
         }
 
-    private fun classState(profile: UserProfile, classId: String): Flow<AppState> =
-        classes.observeClass(classId).transformLatest { result ->
+    private fun classState(user: AuthUser, identity: NithIdentity, profile: UserProfile): Flow<AppState> =
+        classes.observeClass(identity.classId).transformLatest { result ->
             when (result) {
-                is ClassResult.Loaded -> emit(AppState.Ready(ClassContext(profile.uid, profile, result.rollClass)))
+                is ClassResult.Loaded -> emit(
+                    AppState.Ready(
+                        ClassContext(
+                            uid = profile.uid,
+                            profile = profile,
+                            rollClass = result.rollClass,
+                            identity = identity,
+                            isAdmin = NithConfig.isAdmin(user.email),
+                        ),
+                    ),
+                )
                 is ClassResult.Missing -> {
                     if (result.fromCache) {
                         emit(AppState.Loading)
                         delay(CACHE_GRACE_MILLIS)
                     }
-                    emit(AppState.NeedsClass(profile, lostAccess = false))
+                    // Profile without a class doc: run the join again from the confirm screen.
+                    emit(AppState.NeedsProfile(user, identity, profile))
                 }
-                ClassResult.AccessLost -> {
-                    lostAccess.value = true
-                    profiles.clearClassId(profile.uid)
-                    emit(AppState.NeedsClass(profile, lostAccess = true))
-                }
+                ClassResult.AccessLost -> emit(AppState.NeedsProfile(user, identity, profile))
             }
         }
 }
@@ -147,30 +176,4 @@ class ClassData @Inject constructor(
     val timetable: StateFlow<List<TimetableSlot>?> = perClass { classId, _ -> schedule.observeTimetable(classId) }
     val sessions: StateFlow<SessionsSnapshot?> = perClass { classId, _ -> schedule.observeSessions(classId) }
     val myMarks: StateFlow<MyMarks?> = perClass { classId, uid -> marks.observeMyMarks(uid, classId) }
-}
-
-/** A join code from a roll://join/{code} link, waiting for the user to reach the join screen. */
-@Singleton
-class PendingJoin @Inject constructor() {
-    private val _code = MutableStateFlow<String?>(null)
-    val code: StateFlow<String?> = _code.asStateFlow()
-
-    fun offer(code: String) {
-        _code.value = code
-    }
-
-    fun consume() {
-        _code.value = null
-    }
-}
-
-/** Set right after the CR creates a class, so the join code screen shows before the app. */
-@Singleton
-class JustCreated @Inject constructor() {
-    private val _rollClass = MutableStateFlow<RollClass?>(null)
-    val rollClass: StateFlow<RollClass?> = _rollClass.asStateFlow()
-
-    fun set(rollClass: RollClass?) {
-        _rollClass.value = rollClass
-    }
 }

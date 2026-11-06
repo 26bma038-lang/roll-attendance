@@ -81,6 +81,8 @@ data class TodayUiState(
     val postedBy: String? = null,
     val refreshing: Boolean = false,
     val clearedMark: ClearedMark? = null,
+    /** Set when the class has no CR yet, e.g. "MA 2026". */
+    val noCrClassName: String? = null,
 )
 
 @HiltViewModel
@@ -120,6 +122,7 @@ class TodayViewModel @Inject constructor(
             items = sessionItems(todays, subjectMap, markMap, nowLocal),
             yesterdayUnmarked = yesterday.count { it.state == SessionState.UnmarkedPast && it.editable },
             pendingSync = myMarks.hasPendingWrites,
+            noCrClassName = ctx.rollClass.name.takeIf { ctx.rollClass.crUids.isEmpty() },
             postedBy = latest?.let {
                 val posted = it.createdAt!!.atZone(ZoneId.of(tz)).toLocalTime()
                 "Posted by ${it.createdByName.ifBlank { "your CR" }} · ${formatClock(posted.hour * 60 + posted.minute, meridiem = true)}"
@@ -220,7 +223,11 @@ fun TodayScreen(
                         SkeletonList(Modifier.background(colors.surface))
                     }
                     uiState.items.isEmpty() -> item(key = "empty") {
-                        EmptyState(message = "No classes posted yet for today.")
+                        EmptyState(
+                            message = uiState.noCrClassName
+                                ?.let { "No CR yet for $it. Classes appear here once the admin appoints one." }
+                                ?: "No classes posted yet for today.",
+                        )
                     }
                     else -> {
                         itemsIndexed(uiState.items, key = { _, it -> it.session.id }) { index, item ->

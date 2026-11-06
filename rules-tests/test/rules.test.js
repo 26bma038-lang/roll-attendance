@@ -1,4 +1,4 @@
-// Firestore security rules tests. Run with `npm test` (starts the emulator).
+// Firestore security rules tests for Roll v2. Run with `npm test` (starts the emulator).
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import {
@@ -7,26 +7,37 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  arrayUnion,
   collection,
   collectionGroup,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
+  increment,
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
 
-const CLASS = 'class1';
-const CODE = 'K7MP2X';
-const CR = 'cr';
-const STUDENT = 'student';
-const OTHER = 'other'; // member of the class
-const OUTSIDER = 'outsider'; // signed in, not a member
+const CLASS = 'nith-26-ma';
+const OTHER_CLASS = 'nith-26-cs';
+
+// uid → email. The admin is also an MA 2026 student.
+const USERS = {
+  admin: '26bma038@nith.ac.in',
+  cr: '26bma010@nith.ac.in',
+  student: '26bma020@nith.ac.in',
+  newbie: '26bma099@nith.ac.in', // not joined yet
+  cs: '26bcs005@nith.ac.in', // another branch
+  ee: '26bee001@nith.ac.in', // unsupported branch
+  mtech: '26mma001@nith.ac.in', // unsupported programme
+  gmail: 'someone@gmail.com',
+};
 
 /** "YYYY-MM-DD" in Asia/Kolkata, offset by `days`. Matches istToday() in the rules. */
 function istDate(days = 0) {
@@ -51,17 +62,40 @@ after(async () => {
   await env?.cleanup();
 });
 
-const db = (uid) => env.authenticatedContext(uid).firestore();
+/** Firestore as a signed-in user with a verified (or not) email. */
+const db = (uid, { verified = true, email = USERS[uid] } = {}) =>
+  env.authenticatedContext(uid, { email, email_verified: verified }).firestore();
 const anon = () => env.unauthenticatedContext().firestore();
+
+function userDoc(uid, overrides = {}) {
+  const local = USERS[uid].split('@')[0];
+  return {
+    name: uid,
+    rollNo: local.toUpperCase(),
+    email: USERS[uid],
+    batch: 2000 + Number(local.slice(0, 2)),
+    branch: local.slice(3, 5).toUpperCase(),
+    classId: `nith-${local.slice(0, 2)}-${local.slice(3, 5)}`,
+    createdAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+function memberDoc(uid, overrides = {}) {
+  return { name: uid, rollNo: USERS[uid].split('@')[0].toUpperCase(), joinedAt: serverTimestamp(), ...overrides };
+}
 
 function classDoc(overrides = {}) {
   return {
-    name: 'CSE DS — C',
-    semester: 'Odd 2026-27',
-    crUid: CR,
-    joinCode: CODE,
+    name: 'MA 2026',
+    semester: 'Semester 1 · Odd 2026-27',
+    batch: 2026,
+    branch: 'MA',
+    crUids: [],
+    crNames: [],
     requiredPercent: 75,
     timezone: 'Asia/Kolkata',
+    memberCount: 1,
     createdAt: serverTimestamp(),
     ...overrides,
   };
@@ -69,61 +103,64 @@ function classDoc(overrides = {}) {
 
 function sessionDoc(overrides = {}) {
   return {
-    subjectId: 'daa',
-    date: istDate(0),
-    startMinutes: 540,
-    endMinutes: 590,
-    type: 'lecture',
-    status: 'scheduled',
-    note: '',
-    room: 'LH-204',
-    weight: 1,
-    createdBy: CR,
-    createdByName: 'Sahil',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    ...overrides,
+    subjectId: 'daa', date: istDate(0), startMinutes: 540, endMinutes: 590, type: 'lecture',
+    status: 'scheduled', note: '', room: 'LH-204', weight: 1, createdBy: 'cr', createdByName: 'CR',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...overrides,
   };
 }
 
 function markDoc(uid, sessionId, status = 'present', overrides = {}) {
+  return { status, markedAt: serverTimestamp(), uid, classId: CLASS, sessionId, ...overrides };
+}
+
+function assignmentDoc(createdBy, overrides = {}) {
   return {
-    status,
-    markedAt: serverTimestamp(),
-    uid,
-    classId: CLASS,
-    sessionId,
-    ...overrides,
+    title: 'DAA assignment 3', subjectId: 'daa', type: 'assignment', description: '', link: '',
+    dueAt: Timestamp.fromMillis(Date.now() + 86_400_000), createdBy, createdByName: createdBy,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), status: 'active', ...overrides,
   };
 }
 
-/** A class with a CR, two members, one subject, sessions for today / 2 days ago / 3 days ago. */
+function noticeDoc(overrides = {}) {
+  return {
+    text: 'Lab moved to Lab 3 this week', pinned: false, createdAt: serverTimestamp(), expiresAt: null,
+    createdByName: 'CR', status: 'active', updatedAt: serverTimestamp(), ...overrides,
+  };
+}
+
+function departmentDoc(code, overrides = {}) {
+  return {
+    code, name: 'Mathematics and Computing', about: '', hod: '', office: '', email: '', phone: '',
+    links: [], updatedAt: serverTimestamp(), ...overrides,
+  };
+}
+
+/** MA 2026 with one CR and two students; CS 2026 with one student. */
 async function seed() {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const f = ctx.firestore();
     const now = new Date();
-    await setDoc(doc(f, 'classes', CLASS), { ...classDoc(), createdAt: now });
-    await setDoc(doc(f, 'joinCodes', CODE), { classId: CLASS });
-    for (const uid of [CR, STUDENT, OTHER]) {
-      await setDoc(doc(f, `classes/${CLASS}/members/${uid}`), {
-        name: uid, rollNo: `R-${uid}`, joinedAt: now, joinCode: CODE,
-      });
+    await setDoc(doc(f, 'classes', CLASS), { ...classDoc(), crUids: ['cr'], crNames: ['CR'], memberCount: 3, createdAt: now });
+    await setDoc(doc(f, 'classes', OTHER_CLASS), { ...classDoc({ name: 'CS 2026', branch: 'CS' }), memberCount: 1, createdAt: now });
+    for (const uid of ['admin', 'cr', 'student']) {
+      await setDoc(doc(f, `classes/${CLASS}/members/${uid}`), { ...memberDoc(uid), joinedAt: now });
+      await setDoc(doc(f, `users/${uid}`), { ...userDoc(uid), createdAt: now });
     }
+    await setDoc(doc(f, `classes/${OTHER_CLASS}/members/cs`), { ...memberDoc('cs'), joinedAt: now });
     await setDoc(doc(f, `classes/${CLASS}/subjects/daa`), {
-      name: 'Design and Analysis of Algorithms', shortName: 'DAA', code: '21CSC204J',
-      faculty: 'Dr. Rao', colorIndex: 0, archived: false,
-    });
-    await setDoc(doc(f, `classes/${CLASS}/timetable/slot1`), {
-      dayOfWeek: 4, startMinutes: 540, endMinutes: 590, subjectId: 'daa', type: 'lecture', room: 'LH-204',
+      name: 'Design and Analysis of Algorithms', shortName: 'DAA', code: '', faculty: '', colorIndex: 0, archived: false,
     });
     const s = (o) => ({ ...sessionDoc(o), createdAt: now, updatedAt: now });
     await setDoc(doc(f, `classes/${CLASS}/sessions/today`), s());
     await setDoc(doc(f, `classes/${CLASS}/sessions/twoDaysAgo`), s({ date: istDate(-2) }));
     await setDoc(doc(f, `classes/${CLASS}/sessions/threeDaysAgo`), s({ date: istDate(-3) }));
-    await setDoc(doc(f, `classes/${CLASS}/sessions/tomorrow`), s({ date: istDate(1) }));
-    await setDoc(doc(f, `classes/${CLASS}/sessions/cancelled`), s({ status: 'cancelled', note: 'faculty on leave' }));
-    await setDoc(doc(f, `classes/${CLASS}/sessions/today/marks/${OTHER}`), { ...markDoc(OTHER, 'today'), markedAt: now });
-    await setDoc(doc(f, `users/${STUDENT}`), { name: 'Student', rollNo: 'R1', email: 's@x', classId: CLASS, createdAt: now });
+    await setDoc(doc(f, `classes/${CLASS}/sessions/cancelled`), s({ status: 'cancelled' }));
+    await setDoc(doc(f, `classes/${CLASS}/sessions/today/marks/student`), { ...markDoc('student', 'today'), markedAt: now });
+    await setDoc(doc(f, `classes/${CLASS}/assignments/a1`), { ...assignmentDoc('cr'), createdAt: now, updatedAt: now });
+    await setDoc(doc(f, `classes/${CLASS}/notices/n1`), { ...noticeDoc(), createdAt: now, updatedAt: now });
+    await setDoc(doc(f, 'notices/c1'), { ...noticeDoc({ createdByName: 'Admin' }), createdAt: now, updatedAt: now });
+    await setDoc(doc(f, 'departments/MA'), { ...departmentDoc('MA'), updatedAt: now });
+    await setDoc(doc(f, 'users/student/assignmentStatus/a1'), { done: true, doneAt: now });
   });
 }
 
@@ -132,212 +169,194 @@ beforeEach(async () => {
   await seed();
 });
 
-describe('users', () => {
-  test('a user can read and write their own doc', async () => {
-    await assertSucceeds(getDoc(doc(db(STUDENT), 'users', STUDENT)));
-    await assertSucceeds(setDoc(doc(db(STUDENT), 'users', STUDENT), { name: 'S', rollNo: 'R1', email: '', classId: null, createdAt: serverTimestamp() }));
+// ---------------------------------------------------------------------------------------------
+
+describe('who counts as a student', () => {
+  test('wrong domain can read or write nothing', async () => {
+    await assertFails(getDoc(doc(db('gmail'), 'classes', CLASS)));
+    await assertFails(setDoc(doc(db('gmail'), 'users/gmail'), userDoc('newbie')));
+    await assertFails(getDoc(doc(db('gmail'), 'departments/MA')));
+    await assertFails(getDoc(doc(db('gmail'), 'notices/c1')));
   });
 
-  test("a user can't read or write someone else's doc", async () => {
-    await assertFails(getDoc(doc(db(OTHER), 'users', STUDENT)));
-    await assertFails(setDoc(doc(db(OTHER), 'users', STUDENT), { name: 'x' }));
+  test('an unverified email gets nothing, even with the right domain', async () => {
+    const f = db('student', { verified: false });
+    await assertFails(getDoc(doc(f, 'classes', CLASS)));
+    await assertFails(getDoc(doc(f, 'users/student')));
+    await assertFails(getDoc(doc(f, 'departments/MA')));
   });
 
-  test('signed-out users get nothing', async () => {
-    await assertFails(getDoc(doc(anon(), 'users', STUDENT)));
-  });
-});
-
-describe('joinCodes', () => {
-  test('signed-in users can get a code', async () => {
-    await assertSucceeds(getDoc(doc(db(OUTSIDER), 'joinCodes', CODE)));
-  });
-
-  test('signed-out users cannot get a code', async () => {
-    await assertFails(getDoc(doc(anon(), 'joinCodes', CODE)));
-  });
-
-  test('nobody can list codes', async () => {
-    await assertFails(getDocs(collection(db(OUTSIDER), 'joinCodes')));
-    await assertFails(getDocs(collection(db(CR), 'joinCodes')));
-  });
-
-  test('the CR can create and delete a code for their class', async () => {
-    await assertSucceeds(setDoc(doc(db(CR), 'joinCodes', 'ABCDEF'), { classId: CLASS }));
-    await assertSucceeds(deleteDoc(doc(db(CR), 'joinCodes', CODE)));
-  });
-
-  test('a non-CR cannot create or delete a code', async () => {
-    await assertFails(setDoc(doc(db(STUDENT), 'joinCodes', 'ABCDEF'), { classId: CLASS }));
-    await assertFails(deleteDoc(doc(db(STUDENT), 'joinCodes', CODE)));
-  });
-
-  test('an existing code cannot be repointed', async () => {
-    await assertFails(setDoc(doc(db(CR), 'joinCodes', CODE), { classId: 'elsewhere' }));
-  });
-
-  test('malformed codes are rejected', async () => {
-    await assertFails(setDoc(doc(db(CR), 'joinCodes', 'ABC0EF'), { classId: CLASS }));
-  });
-});
-
-describe('classes', () => {
-  test('anyone signed in can create a class as its CR, with code and member doc in one batch', async () => {
-    const f = db(OUTSIDER);
-    const batch = writeBatch(f);
-    batch.set(doc(f, 'classes', 'new'), classDoc({ crUid: OUTSIDER, joinCode: 'NEWCDE' }));
-    batch.set(doc(f, 'joinCodes', 'NEWCDE'), { classId: 'new' });
-    batch.set(doc(f, 'classes/new/members', OUTSIDER), { name: 'O', rollNo: 'R9', joinedAt: serverTimestamp(), joinCode: 'NEWCDE' });
-    await assertSucceeds(batch.commit());
-  });
-
-  test('cannot create a class naming someone else as CR', async () => {
-    await assertFails(setDoc(doc(db(OUTSIDER), 'classes', 'new'), classDoc({ crUid: STUDENT })));
-  });
-
-  test('cannot create a class with a bad required percent', async () => {
-    await assertFails(setDoc(doc(db(OUTSIDER), 'classes', 'new'), classDoc({ crUid: OUTSIDER, requiredPercent: 120 })));
-  });
-
-  test('signed-out users cannot create a class', async () => {
-    await assertFails(setDoc(doc(anon(), 'classes', 'new'), classDoc()));
-  });
-
-  test('members and the CR can read the class; outsiders cannot', async () => {
-    await assertSucceeds(getDoc(doc(db(STUDENT), 'classes', CLASS)));
-    await assertSucceeds(getDoc(doc(db(CR), 'classes', CLASS)));
-    await assertFails(getDoc(doc(db(OUTSIDER), 'classes', CLASS)));
-  });
-
-  test('only the CR can update the class', async () => {
-    await assertSucceeds(updateDoc(doc(db(CR), 'classes', CLASS), { requiredPercent: 80 }));
-    await assertFails(updateDoc(doc(db(STUDENT), 'classes', CLASS), { requiredPercent: 50 }));
-  });
-
-  test('the CR can transfer the role to a member', async () => {
-    await assertSucceeds(updateDoc(doc(db(CR), 'classes', CLASS), { crUid: STUDENT }));
-  });
-
-  test('the CR cannot transfer the role to a non-member', async () => {
-    await assertFails(updateDoc(doc(db(CR), 'classes', CLASS), { crUid: OUTSIDER }));
-  });
-
-  test('a member cannot take the CR role', async () => {
-    await assertFails(updateDoc(doc(db(STUDENT), 'classes', CLASS), { crUid: STUDENT }));
-  });
-
-  test('nobody can delete a class', async () => {
-    await assertFails(deleteDoc(doc(db(CR), 'classes', CLASS)));
-  });
-});
-
-describe('members', () => {
-  const join = (uid, code = CODE, classId = CLASS) =>
-    setDoc(doc(db(uid), `classes/${classId}/members/${uid}`), {
-      name: 'New', rollNo: 'R7', joinedAt: serverTimestamp(), joinCode: code,
-    });
-
-  test('a user can join with a valid code', async () => {
-    await assertSucceeds(join(OUTSIDER));
-  });
-
-  test('a user cannot join with a wrong or missing code', async () => {
-    await assertFails(join(OUTSIDER, 'ZZZZZZ'));
-    await assertFails(setDoc(doc(db(OUTSIDER), `classes/${CLASS}/members/${OUTSIDER}`), {
-      name: 'New', rollNo: 'R7', joinedAt: serverTimestamp(),
-    }));
-  });
-
-  test("a code for another class doesn't open this one", async () => {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'joinCodes', 'OTHERC'), { classId: 'class2' });
-    });
-    await assertFails(join(OUTSIDER, 'OTHERC'));
-  });
-
-  test('a user cannot create a member doc for someone else', async () => {
-    await assertFails(setDoc(doc(db(OUTSIDER), `classes/${CLASS}/members/someoneElse`), {
-      name: 'X', rollNo: 'R', joinedAt: serverTimestamp(), joinCode: CODE,
-    }));
-  });
-
-  test('members read only their own doc; the CR reads all', async () => {
-    await assertSucceeds(getDoc(doc(db(STUDENT), `classes/${CLASS}/members/${STUDENT}`)));
-    await assertFails(getDoc(doc(db(STUDENT), `classes/${CLASS}/members/${OTHER}`)));
-    await assertSucceeds(getDocs(collection(db(CR), `classes/${CLASS}/members`)));
-    await assertFails(getDocs(collection(db(STUDENT), `classes/${CLASS}/members`)));
-  });
-
-  test('a member can update their own name and roll number only', async () => {
-    await assertSucceeds(updateDoc(doc(db(STUDENT), `classes/${CLASS}/members/${STUDENT}`), { rollNo: 'R2' }));
-    await assertFails(updateDoc(doc(db(STUDENT), `classes/${CLASS}/members/${STUDENT}`), { joinCode: 'ABCDEF' }));
-    await assertFails(updateDoc(doc(db(STUDENT), `classes/${CLASS}/members/${OTHER}`), { rollNo: 'R2' }));
-  });
-
-  test('the CR can remove a member', async () => {
-    await assertSucceeds(deleteDoc(doc(db(CR), `classes/${CLASS}/members/${STUDENT}`)));
-  });
-
-  test('a member cannot remove someone else', async () => {
-    await assertFails(deleteDoc(doc(db(STUDENT), `classes/${CLASS}/members/${OTHER}`)));
-  });
-
-  test('a member can leave', async () => {
-    await assertSucceeds(deleteDoc(doc(db(STUDENT), `classes/${CLASS}/members/${STUDENT}`)));
-  });
-
-  test('the CR cannot leave without transferring the role', async () => {
-    await assertFails(deleteDoc(doc(db(CR), `classes/${CLASS}/members/${CR}`)));
-  });
-});
-
-describe('subjects, timetable, sessions', () => {
-  const subject = { name: 'Computer Networks', shortName: 'CN', code: '', faculty: '', colorIndex: 2, archived: false };
-  const slot = { dayOfWeek: 1, startMinutes: 600, endMinutes: 650, subjectId: 'daa', type: 'lab', room: 'Lab 3' };
-
-  test('members and the CR can read; outsiders cannot', async () => {
-    for (const path of ['subjects', 'timetable', 'sessions']) {
-      await assertSucceeds(getDocs(collection(db(STUDENT), `classes/${CLASS}/${path}`)));
-      await assertSucceeds(getDocs(collection(db(CR), `classes/${CLASS}/${path}`)));
-      await assertFails(getDocs(collection(db(OUTSIDER), `classes/${CLASS}/${path}`)));
+  test('unsupported branches and programmes get nothing', async () => {
+    for (const uid of ['ee', 'mtech']) {
+      await assertFails(getDoc(doc(db(uid), 'departments/MA')));
+      await assertFails(getDoc(doc(db(uid), 'notices/c1')));
+      await assertFails(setDoc(doc(db(uid), `users/${uid}`), userDoc(uid)));
     }
   });
 
-  test('only the CR writes subjects', async () => {
-    await assertSucceeds(setDoc(doc(db(CR), `classes/${CLASS}/subjects/cn`), subject));
-    await assertFails(setDoc(doc(db(STUDENT), `classes/${CLASS}/subjects/cn`), subject));
-    await assertSucceeds(updateDoc(doc(db(CR), `classes/${CLASS}/subjects/daa`), { archived: true }));
-    await assertFails(updateDoc(doc(db(STUDENT), `classes/${CLASS}/subjects/daa`), { archived: true }));
+  test('upper-case emails are treated the same', async () => {
+    const f = db('student', { email: '26BMA020@NITH.AC.IN' });
+    await assertSucceeds(getDoc(doc(f, 'classes', CLASS)));
   });
 
-  test('only the CR writes the timetable', async () => {
-    await assertSucceeds(setDoc(doc(db(CR), `classes/${CLASS}/timetable/slot2`), slot));
-    await assertFails(setDoc(doc(db(STUDENT), `classes/${CLASS}/timetable/slot2`), slot));
-    await assertFails(deleteDoc(doc(db(STUDENT), `classes/${CLASS}/timetable/slot1`)));
-    await assertSucceeds(deleteDoc(doc(db(CR), `classes/${CLASS}/timetable/slot1`)));
+  test('signed-out users get nothing', async () => {
+    await assertFails(getDoc(doc(anon(), 'classes', CLASS)));
+    await assertFails(getDoc(doc(anon(), 'departments/MA')));
+  });
+});
+
+describe('users', () => {
+  test('a student creates their own profile matching their email', async () => {
+    await assertSucceeds(setDoc(doc(db('newbie'), 'users/newbie'), userDoc('newbie')));
   });
 
-  test('timetable slots must end after they start', async () => {
-    await assertFails(setDoc(doc(db(CR), `classes/${CLASS}/timetable/bad`), { ...slot, endMinutes: 500 }));
+  test('roll number, batch, branch and class must match the email', async () => {
+    const f = db('newbie');
+    await assertFails(setDoc(doc(f, 'users/newbie'), userDoc('newbie', { rollNo: '26BMA001' })));
+    await assertFails(setDoc(doc(f, 'users/newbie'), userDoc('newbie', { batch: 2025 })));
+    await assertFails(setDoc(doc(f, 'users/newbie'), userDoc('newbie', { branch: 'CS' })));
+    await assertFails(setDoc(doc(f, 'users/newbie'), userDoc('newbie', { classId: OTHER_CLASS })));
   });
 
-  test('only the CR posts, edits and cancels sessions', async () => {
-    await assertSucceeds(setDoc(doc(db(CR), `classes/${CLASS}/sessions/new`), sessionDoc()));
-    await assertFails(setDoc(doc(db(STUDENT), `classes/${CLASS}/sessions/new2`), sessionDoc({ createdBy: STUDENT })));
-    await assertSucceeds(updateDoc(doc(db(CR), `classes/${CLASS}/sessions/today`), {
+  test('roll number and branch can never be edited later; the name can', async () => {
+    const f = db('student');
+    await assertFails(updateDoc(doc(f, 'users/student'), { rollNo: '26BMA001' }));
+    await assertFails(updateDoc(doc(f, 'users/student'), { branch: 'CS' }));
+    await assertFails(updateDoc(doc(f, 'users/student'), { classId: OTHER_CLASS }));
+    await assertSucceeds(updateDoc(doc(f, 'users/student'), { name: 'New name' }));
+  });
+
+  test("students can't read other profiles; the admin can", async () => {
+    await assertFails(getDoc(doc(db('cr'), 'users/student')));
+    await assertSucceeds(getDoc(doc(db('admin'), 'users/student')));
+  });
+
+  test('a profile for someone else is refused', async () => {
+    await assertFails(setDoc(doc(db('newbie'), 'users/student'), userDoc('newbie')));
+  });
+});
+
+describe('joining the class from the email', () => {
+  test('the first student creates the class with no CRs, with their member doc', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => deleteDoc(doc(ctx.firestore(), 'classes', CLASS)));
+    const f = db('newbie');
+    const batch = writeBatch(f);
+    batch.set(doc(f, 'classes', CLASS), classDoc());
+    batch.set(doc(f, `classes/${CLASS}/members/newbie`), memberDoc('newbie'));
+    batch.set(doc(f, 'users/newbie'), userDoc('newbie'));
+    await assertSucceeds(batch.commit());
+  });
+
+  test('a new class must start with no CRs', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => deleteDoc(doc(ctx.firestore(), 'classes', CLASS)));
+    const f = db('newbie');
+    const batch = writeBatch(f);
+    batch.set(doc(f, 'classes', CLASS), classDoc({ crUids: ['newbie'], crNames: ['newbie'] }));
+    batch.set(doc(f, `classes/${CLASS}/members/newbie`), memberDoc('newbie'));
+    await assertFails(batch.commit());
+  });
+
+  test('later students join and bump the member count by one', async () => {
+    const f = db('newbie');
+    const batch = writeBatch(f);
+    batch.set(doc(f, `classes/${CLASS}/members/newbie`), memberDoc('newbie'));
+    batch.update(doc(f, 'classes', CLASS), { memberCount: increment(1) });
+    await assertSucceeds(batch.commit());
+  });
+
+  test("the member count can't be bumped without joining", async () => {
+    await assertFails(updateDoc(doc(db('student'), 'classes', CLASS), { memberCount: increment(1) }));
+  });
+
+  test("joining another branch's class is refused", async () => {
+    const f = db('newbie');
+    await assertFails(setDoc(doc(f, `classes/${OTHER_CLASS}/members/newbie`), memberDoc('newbie')));
+    await assertFails(setDoc(doc(f, 'classes', 'nith-26-ce'), classDoc({ branch: 'CE' })));
+  });
+
+  test("a member doc's roll number must match the email", async () => {
+    await assertFails(setDoc(doc(db('newbie'), `classes/${CLASS}/members/newbie`), memberDoc('newbie', { rollNo: '26BMA001' })));
+  });
+
+  test("students can read their own class only", async () => {
+    await assertSucceeds(getDoc(doc(db('student'), 'classes', CLASS)));
+    await assertFails(getDoc(doc(db('student'), 'classes', OTHER_CLASS)));
+    await assertFails(getDocs(collection(db('student'), 'classes')));
+  });
+});
+
+describe('admin and CRs', () => {
+  test('the admin lists every class and reads members and users', async () => {
+    const f = db('admin');
+    await assertSucceeds(getDocs(collection(f, 'classes')));
+    await assertSucceeds(getDocs(collection(f, `classes/${OTHER_CLASS}/members`)));
+    await assertSucceeds(getDoc(doc(f, 'users/student')));
+  });
+
+  test('the admin appoints a CR', async () => {
+    await assertSucceeds(updateDoc(doc(db('admin'), 'classes', CLASS), {
+      crUids: arrayUnion('student'), crNames: ['CR', 'student'],
+    }));
+    await assertSucceeds(updateDoc(doc(db('admin'), 'classes', OTHER_CLASS), { crUids: ['cs'], crNames: ['cs'] }));
+  });
+
+  test('at most three CRs, and names must match', async () => {
+    const f = db('admin');
+    await assertFails(updateDoc(doc(f, 'classes', CLASS), { crUids: ['a', 'b', 'c', 'd'], crNames: ['a', 'b', 'c', 'd'] }));
+    await assertFails(updateDoc(doc(f, 'classes', CLASS), { crUids: ['a', 'b'], crNames: ['a'] }));
+  });
+
+  test("a CR can't change the CR list", async () => {
+    await assertFails(updateDoc(doc(db('cr'), 'classes', CLASS), { crUids: ['cr', 'student'], crNames: ['CR', 'S'] }));
+    await assertFails(updateDoc(doc(db('cr'), 'classes', CLASS), { crUids: [], crNames: [] }));
+  });
+
+  test("a student can't make themselves CR", async () => {
+    await assertFails(updateDoc(doc(db('student'), 'classes', CLASS), { crUids: ['cr', 'student'], crNames: ['CR', 'S'] }));
+  });
+
+  test('a CR edits class settings; a student cannot', async () => {
+    await assertSucceeds(updateDoc(doc(db('cr'), 'classes', CLASS), { name: 'MA 2026 — B.Tech', requiredPercent: 80 }));
+    await assertFails(updateDoc(doc(db('student'), 'classes', CLASS), { requiredPercent: 50 }));
+  });
+
+  test('only CRs and the admin see the member list', async () => {
+    await assertSucceeds(getDocs(collection(db('cr'), `classes/${CLASS}/members`)));
+    await assertFails(getDocs(collection(db('student'), `classes/${CLASS}/members`)));
+    await assertSucceeds(getDoc(doc(db('student'), `classes/${CLASS}/members/student`)));
+  });
+});
+
+describe('class content: subjects, timetable, sessions', () => {
+  const subject = { name: 'Computer Networks', shortName: 'CN', code: '', faculty: '', colorIndex: 2, archived: false };
+  const slot = { dayOfWeek: 1, startMinutes: 600, endMinutes: 650, subjectId: 'daa', type: 'lab', room: 'Lab 3' };
+
+  test('everyone in the class reads; other branches cannot', async () => {
+    for (const path of ['subjects', 'timetable', 'sessions']) {
+      await assertSucceeds(getDocs(collection(db('student'), `classes/${CLASS}/${path}`)));
+      await assertFails(getDocs(collection(db('cs'), `classes/${CLASS}/${path}`)));
+    }
+  });
+
+  test('a student cannot post a class, subject or timetable slot', async () => {
+    const f = db('student');
+    await assertFails(setDoc(doc(f, `classes/${CLASS}/sessions/new`), sessionDoc({ createdBy: 'student' })));
+    await assertFails(setDoc(doc(f, `classes/${CLASS}/subjects/cn`), subject));
+    await assertFails(setDoc(doc(f, `classes/${CLASS}/timetable/s1`), slot));
+  });
+
+  test('a CR posts, edits and cancels', async () => {
+    const f = db('cr');
+    await assertSucceeds(setDoc(doc(f, `classes/${CLASS}/subjects/cn`), subject));
+    await assertSucceeds(setDoc(doc(f, `classes/${CLASS}/timetable/s1`), slot));
+    await assertSucceeds(setDoc(doc(f, `classes/${CLASS}/sessions/new`), sessionDoc()));
+    await assertSucceeds(updateDoc(doc(f, `classes/${CLASS}/sessions/today`), {
       status: 'cancelled', note: 'faculty on leave', updatedAt: serverTimestamp(),
     }));
-    await assertFails(updateDoc(doc(db(STUDENT), `classes/${CLASS}/sessions/today`), {
-      status: 'cancelled', updatedAt: serverTimestamp(),
-    }));
   });
 
-  test('session writes must stamp updatedAt', async () => {
-    await assertFails(updateDoc(doc(db(CR), `classes/${CLASS}/sessions/today`), { note: 'Moved to Lab 3' }));
-  });
-
-  test('session weight is bounded', async () => {
-    await assertFails(setDoc(doc(db(CR), `classes/${CLASS}/sessions/heavy`), sessionDoc({ weight: 9 })));
+  test("a CR of one class can't post in another", async () => {
+    await assertFails(setDoc(doc(db('cr'), `classes/${OTHER_CLASS}/sessions/new`), sessionDoc()));
   });
 });
 
@@ -346,65 +365,101 @@ describe('marks', () => {
   const mark = (uid, sessionId, status = 'present', asUid = uid) =>
     setDoc(markRef(db(asUid), sessionId, uid), markDoc(uid, sessionId, status));
 
-  test('a member marks their own attendance today', async () => {
-    await assertSucceeds(mark(STUDENT, 'today'));
-    await assertSucceeds(mark(STUDENT, 'today', 'absent'));
-    await assertSucceeds(mark(STUDENT, 'today', 'cleared'));
+  test('students mark their own attendance within the window', async () => {
+    await assertSucceeds(mark('student', 'today'));
+    await assertSucceeds(mark('student', 'today', 'cleared'));
+    await assertSucceeds(mark('student', 'twoDaysAgo', 'absent'));
+    await assertFails(mark('student', 'threeDaysAgo'));
+    await assertFails(mark('student', 'cancelled'));
   });
 
-  test('the CR marks their own attendance too', async () => {
-    await assertSucceeds(mark(CR, 'today'));
+  test('nobody marks for someone else; other branches cannot mark', async () => {
+    await assertFails(mark('student', 'today', 'absent', 'cr'));
+    await assertFails(setDoc(markRef(db('cs'), 'today', 'cs'), markDoc('cs', 'today')));
   });
 
-  test('marks two days back are allowed; three days back are not', async () => {
-    await assertSucceeds(mark(STUDENT, 'twoDaysAgo'));
-    await assertFails(mark(STUDENT, 'threeDaysAgo'));
+  test('CRs read all marks; students only their own', async () => {
+    await assertSucceeds(getDocs(collection(db('cr'), `classes/${CLASS}/sessions/today/marks`)));
+    await assertFails(getDocs(collection(db('student'), `classes/${CLASS}/sessions/today/marks`)));
+    await assertSucceeds(getDocs(query(collectionGroup(db('student'), 'marks'), where('uid', '==', 'student'))));
+    await assertFails(getDocs(query(collectionGroup(db('cr'), 'marks'), where('uid', '==', 'student'))));
+  });
+});
+
+describe('assignments', () => {
+  test('a student cannot post or edit an assignment', async () => {
+    await assertFails(setDoc(doc(db('student'), `classes/${CLASS}/assignments/a2`), assignmentDoc('student')));
+    await assertFails(updateDoc(doc(db('student'), `classes/${CLASS}/assignments/a1`), {
+      status: 'deleted', updatedAt: serverTimestamp(),
+    }));
   });
 
-  test('future sessions cannot be marked', async () => {
-    await assertFails(mark(STUDENT, 'tomorrow'));
+  test('a CR posts, edits and deletes (tombstone)', async () => {
+    const f = db('cr');
+    await assertSucceeds(setDoc(doc(f, `classes/${CLASS}/assignments/a2`), assignmentDoc('cr', { type: 'lab_report' })));
+    await assertSucceeds(updateDoc(doc(f, `classes/${CLASS}/assignments/a1`), { title: 'Renamed', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(f, `classes/${CLASS}/assignments/a1`), { status: 'deleted', updatedAt: serverTimestamp() }));
   });
 
-  test('cancelled sessions cannot be marked', async () => {
-    await assertFails(mark(STUDENT, 'cancelled'));
+  test('the admin can post too', async () => {
+    await assertSucceeds(setDoc(doc(db('admin'), `classes/${OTHER_CLASS}/assignments/x`), assignmentDoc('admin')));
   });
 
-  test("nobody can mark for someone else, not even the CR", async () => {
-    await assertFails(mark(OTHER, 'today', 'absent', STUDENT));
-    await assertFails(mark(STUDENT, 'today', 'absent', CR));
+  test('bad types and hard deletes are refused', async () => {
+    await assertFails(setDoc(doc(db('cr'), `classes/${CLASS}/assignments/a3`), assignmentDoc('cr', { type: 'homework' })));
+    await assertFails(deleteDoc(doc(db('cr'), `classes/${CLASS}/assignments/a1`)));
   });
 
-  test('non-members cannot mark', async () => {
-    await assertFails(mark(OUTSIDER, 'today'));
+  test('students read assignments of their own class only', async () => {
+    await assertSucceeds(getDocs(collection(db('student'), `classes/${CLASS}/assignments`)));
+    await assertFails(getDocs(collection(db('cs'), `classes/${CLASS}/assignments`)));
   });
 
-  test('only present, absent or cleared', async () => {
-    await assertFails(mark(STUDENT, 'today', 'late'));
+  test("done ticks are private: nobody reads another student's", async () => {
+    await assertSucceeds(setDoc(doc(db('student'), 'users/student/assignmentStatus/a2'), { done: true, doneAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(db('student'), 'users/student/assignmentStatus/a1')));
+    await assertFails(getDoc(doc(db('cr'), 'users/student/assignmentStatus/a1')));
+    await assertFails(getDoc(doc(db('admin'), 'users/student/assignmentStatus/a1')));
+    await assertFails(setDoc(doc(db('cr'), 'users/student/assignmentStatus/a1'), { done: false, doneAt: serverTimestamp() }));
+  });
+});
+
+describe('notices', () => {
+  test('a student cannot post a class or college notice', async () => {
+    await assertFails(setDoc(doc(db('student'), `classes/${CLASS}/notices/n2`), noticeDoc()));
+    await assertFails(setDoc(doc(db('student'), 'notices/c2'), noticeDoc()));
   });
 
-  test('mark fields must match their path', async () => {
-    await assertFails(setDoc(markRef(db(STUDENT), 'today', STUDENT), markDoc(STUDENT, 'twoDaysAgo')));
-    await assertFails(setDoc(markRef(db(STUDENT), 'today', STUDENT), markDoc(STUDENT, 'today', 'present', { classId: 'class2' })));
+  test('a CR posts class notices but not college ones', async () => {
+    await assertSucceeds(setDoc(doc(db('cr'), `classes/${CLASS}/notices/n2`), noticeDoc({ pinned: true })));
+    await assertFails(setDoc(doc(db('cr'), 'notices/c2'), noticeDoc()));
   });
 
-  test('the CR reads all marks for a session', async () => {
-    await assertSucceeds(getDocs(collection(db(CR), `classes/${CLASS}/sessions/today/marks`)));
+  test('the admin posts college notices', async () => {
+    await assertSucceeds(setDoc(doc(db('admin'), 'notices/c2'), noticeDoc({ expiresAt: Timestamp.fromMillis(Date.now() + 1e9) })));
+    await assertSucceeds(updateDoc(doc(db('admin'), 'notices/c1'), { status: 'deleted', updatedAt: serverTimestamp() }));
   });
 
-  test('students read only their own mark', async () => {
-    await assertSucceeds(getDoc(markRef(db(OTHER), 'today', OTHER)));
-    await assertFails(getDoc(markRef(db(STUDENT), 'today', OTHER)));
-    await assertFails(getDocs(collection(db(STUDENT), `classes/${CLASS}/sessions/today/marks`)));
+  test('notices are capped at 500 characters', async () => {
+    await assertFails(setDoc(doc(db('cr'), `classes/${CLASS}/notices/n3`), noticeDoc({ text: 'x'.repeat(501) })));
   });
 
-  test("students can query their own marks across sessions, not anyone else's", async () => {
-    await assertSucceeds(getDocs(query(collectionGroup(db(OTHER), 'marks'), where('uid', '==', OTHER))));
-    await assertFails(getDocs(query(collectionGroup(db(STUDENT), 'marks'), where('uid', '==', OTHER))));
-    await assertFails(getDocs(collectionGroup(db(STUDENT), 'marks')));
+  test('every valid student reads college notices; class notices stay in the class', async () => {
+    await assertSucceeds(getDoc(doc(db('cs'), 'notices/c1')));
+    await assertFails(getDoc(doc(db('cs'), `classes/${CLASS}/notices/n1`)));
+  });
+});
+
+describe('departments', () => {
+  test('any valid student reads; only the admin writes', async () => {
+    await assertSucceeds(getDoc(doc(db('cs'), 'departments/MA')));
+    await assertFails(setDoc(doc(db('cr'), 'departments/MA'), departmentDoc('MA', { hod: 'x' })));
+    await assertSucceeds(setDoc(doc(db('admin'), 'departments/MA'), departmentDoc('MA', {
+      links: [{ title: 'Department page', url: 'https://nith.ac.in' }],
+    })));
   });
 
-  test('only the CR deletes marks (when deleting a session)', async () => {
-    await assertFails(deleteDoc(markRef(db(OTHER), 'today', OTHER)));
-    await assertSucceeds(deleteDoc(markRef(db(CR), 'today', OTHER)));
+  test('only supported branches have department docs', async () => {
+    await assertFails(setDoc(doc(db('admin'), 'departments/EE'), departmentDoc('EE', { name: 'Electrical' })));
   });
 });

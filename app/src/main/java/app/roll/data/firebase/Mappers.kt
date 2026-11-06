@@ -1,8 +1,13 @@
 package app.roll.data.firebase
 
 import app.roll.core.common.DEFAULT_CLASS_TIMEZONE
+import app.roll.domain.model.Assignment
+import app.roll.domain.model.AssignmentType
+import app.roll.domain.model.Department
+import app.roll.domain.model.DepartmentLink
 import app.roll.domain.model.Mark
 import app.roll.domain.model.MarkRecord
+import app.roll.domain.model.Notice
 import app.roll.domain.model.Member
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Session
@@ -25,12 +30,15 @@ import java.time.LocalDate
 internal object F {
     const val USERS = "users"
     const val CLASSES = "classes"
-    const val JOIN_CODES = "joinCodes"
     const val MEMBERS = "members"
     const val SUBJECTS = "subjects"
     const val TIMETABLE = "timetable"
     const val SESSIONS = "sessions"
     const val MARKS = "marks"
+    const val ASSIGNMENTS = "assignments"
+    const val ASSIGNMENT_STATUS = "assignmentStatus"
+    const val NOTICES = "notices"
+    const val DEPARTMENTS = "departments"
 
     const val CLASS_ID = "classId"
     const val UPDATED_AT = "updatedAt"
@@ -39,6 +47,8 @@ internal object F {
     const val DATE = "date"
 
     const val STATUS_CLEARED = "cleared"
+    const val STATUS_ACTIVE = "active"
+    const val STATUS_DELETED = "deleted"
 }
 
 private fun DocumentSnapshot.instant(field: String): Instant? =
@@ -64,20 +74,26 @@ internal fun DocumentSnapshot.toUserProfile(): UserProfile? {
         name = str("name"),
         rollNo = str("rollNo"),
         email = str("email"),
+        batch = int("batch"),
+        branch = str("branch"),
         classId = getString(F.CLASS_ID)?.takeIf { it.isNotBlank() },
     )
 }
 
 internal fun DocumentSnapshot.toRollClass(): RollClass? {
     if (!exists()) return null
+    fun strings(field: String): List<String> = (get(field) as? List<*>).orEmpty().filterIsInstance<String>()
     return RollClass(
         id = id,
         name = str("name"),
         semester = str("semester"),
-        crUid = str("crUid"),
-        joinCode = str("joinCode"),
+        batch = int("batch"),
+        branch = str("branch"),
+        crUids = strings("crUids"),
+        crNames = strings("crNames"),
         requiredPercent = int("requiredPercent", 75).coerceIn(1, 100),
         timezone = getString("timezone") ?: DEFAULT_CLASS_TIMEZONE,
+        memberCount = int("memberCount"),
     )
 }
 
@@ -140,5 +156,70 @@ internal fun DocumentSnapshot.toMarkRecord(): MarkRecord? {
         sessionId = getString("sessionId") ?: reference.parent.parent?.id ?: return null,
         mark = mark,
         markedAt = instant(F.MARKED_AT),
+    )
+}
+
+/** Wire names for assignment types, shared with firestore.rules. */
+internal val AssignmentType.wire: String
+    get() = when (this) {
+        AssignmentType.Assignment -> "assignment"
+        AssignmentType.LabReport -> "lab_report"
+        AssignmentType.Quiz -> "quiz"
+        AssignmentType.MidSem -> "mid_sem"
+        AssignmentType.EndSem -> "end_sem"
+        AssignmentType.Presentation -> "presentation"
+        AssignmentType.Other -> "other"
+    }
+
+internal fun assignmentTypeOf(value: String?): AssignmentType =
+    AssignmentType.entries.firstOrNull { it.wire == value } ?: AssignmentType.Other
+
+/** Null for deleted tombstones and broken docs. */
+internal fun DocumentSnapshot.toAssignment(): Assignment? {
+    if (!exists() || getString("status") == F.STATUS_DELETED) return null
+    return Assignment(
+        id = id,
+        title = str("title"),
+        subjectId = str("subjectId"),
+        type = assignmentTypeOf(getString("type")),
+        description = str("description"),
+        link = str("link"),
+        dueAt = instant("dueAt") ?: return null,
+        createdBy = str("createdBy"),
+        createdByName = str("createdByName"),
+        createdAt = instant("createdAt"),
+    )
+}
+
+/** Null for deleted tombstones. */
+internal fun DocumentSnapshot.toNotice(college: Boolean): Notice? {
+    if (!exists() || getString("status") == F.STATUS_DELETED) return null
+    return Notice(
+        id = id,
+        text = str("text"),
+        pinned = getBoolean("pinned") ?: false,
+        createdAt = instant("createdAt"),
+        expiresAt = instant("expiresAt"),
+        createdByName = str("createdByName"),
+        college = college,
+    )
+}
+
+internal fun DocumentSnapshot.toDepartment(code: String, name: String): Department {
+    if (!exists()) return Department(code = code, name = name)
+    val links = (get("links") as? List<*>).orEmpty().mapNotNull { entry ->
+        val map = entry as? Map<*, *> ?: return@mapNotNull null
+        val url = map["url"] as? String ?: return@mapNotNull null
+        DepartmentLink(title = (map["title"] as? String).orEmpty().ifBlank { url }, url = url)
+    }
+    return Department(
+        code = code,
+        name = getString("name")?.ifBlank { null } ?: name,
+        about = str("about"),
+        hod = str("hod"),
+        office = str("office"),
+        email = str("email"),
+        phone = str("phone"),
+        links = links,
     )
 }

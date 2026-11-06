@@ -9,6 +9,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import app.roll.domain.college.NithConfig
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +46,12 @@ class GoogleSignIn @Inject constructor(
                 "Google sign-in isn't enabled for this build. Enable it in the Firebase console and download google-services.json again.",
             )
         val request = GetCredentialRequest.Builder()
-            .addCredentialOption(GetSignInWithGoogleOption.Builder(clientId).build())
+            .addCredentialOption(
+                GetSignInWithGoogleOption.Builder(clientId)
+                    // Only offer @nith.ac.in accounts in the picker. AppSession checks again after sign-in.
+                    .setHostedDomainFilter(NithConfig.DOMAIN)
+                    .build(),
+            )
             .build()
         return try {
             val credential = credentialManager.getCredential(activityContext, request).credential
@@ -57,7 +63,7 @@ class GoogleSignIn @Inject constructor(
         } catch (_: GetCredentialCancellationException) {
             GoogleTokenResult.Cancelled
         } catch (_: NoCredentialException) {
-            GoogleTokenResult.Failure("No Google account on this phone. Add one in system settings, then try again.")
+            GoogleTokenResult.Failure("No @nith.ac.in account on this phone. Add your college Google account in system settings, then try again.")
         } catch (e: GetCredentialException) {
             GoogleTokenResult.Failure("Couldn't sign in with Google. ${e.errorMessage ?: "Try again."}")
         }

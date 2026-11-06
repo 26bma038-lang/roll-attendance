@@ -27,19 +27,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.roll.core.common.UserMessages
 import app.roll.core.designsystem.component.LocalRollSnackbar
-import app.roll.core.designsystem.component.RollDialog
 import app.roll.core.designsystem.component.RollSnackbarHost
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.core.designsystem.theme.Spacing
 import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.session.AppSession
 import app.roll.data.session.AppState
-import app.roll.data.session.JustCreated
-import app.roll.data.session.PendingJoin
-import app.roll.domain.model.RollClass
 import app.roll.feature.auth.SignInRoute
-import app.roll.feature.onboarding.ClassCreatedScreen
-import app.roll.feature.onboarding.JoinOrCreateRoute
 import app.roll.feature.onboarding.ProfileSetupRoute
 import app.roll.feature.settings.ReminderScheduler
 import app.roll.navigation.RollNavHost
@@ -54,31 +48,22 @@ import javax.inject.Inject
 @HiltViewModel
 class RootViewModel @Inject constructor(
     session: AppSession,
-    private val justCreated: JustCreated,
-    private val pendingJoin: PendingJoin,
     messages: UserMessages,
     preferences: UserPreferencesRepository,
     reminders: ReminderScheduler,
 ) : ViewModel() {
     val state: StateFlow<AppState> = session.state
-    val created: StateFlow<RollClass?> = justCreated.rollClass
-    val pendingCode: StateFlow<String?> = pendingJoin.code
     val messages: SharedFlow<String> = messages.messages
 
     init {
         // Re-arm the daily reminder at its exact time on every start.
         viewModelScope.launch { reminders.apply(preferences.reminder.first()) }
     }
-
-    fun dismissCreated() = justCreated.set(null)
-    fun dismissPendingCode() = pendingJoin.consume()
 }
 
 @Composable
 fun RollApp(viewModel: RootViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val created by viewModel.created.collectAsStateWithLifecycle()
-    val pendingCode by viewModel.pendingCode.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
@@ -91,30 +76,13 @@ fun RollApp(viewModel: RootViewModel = hiltViewModel()) {
                 .fillMaxSize()
                 .background(RollTheme.colors.background),
         ) {
-            val createdClass = created
-            when {
-                createdClass != null -> ClassCreatedScreen(rollClass = createdClass, onContinue = viewModel::dismissCreated)
-                else -> when (val current = state) {
-                    AppState.Loading -> Unit // the splash screen covers the first load
-                    AppState.SignedOut -> SignInRoute()
-                    is AppState.NeedsProfile -> ProfileSetupRoute(user = current.user, existing = current.existing)
-                    is AppState.NeedsClass -> JoinOrCreateRoute(profile = current.profile, lostAccess = current.lostAccess)
-                    is AppState.Ready -> {
-                        RollNavHost(isCR = current.context.isCR)
-                        if (pendingCode != null) {
-                            RollDialog(
-                                title = "You're already in a class",
-                                text = "You're in ${current.context.rollClass.name}. To join another class, leave this one in Settings first.",
-                                confirmLabel = "OK",
-                                dismissLabel = "Close",
-                                onConfirm = viewModel::dismissPendingCode,
-                                onDismiss = viewModel::dismissPendingCode,
-                            )
-                        }
-                    }
-                }
+            when (val current = state) {
+                AppState.Loading -> Unit // the splash screen covers the first load
+                AppState.SignedOut -> SignInRoute()
+                is AppState.NeedsProfile -> ProfileSetupRoute(user = current.user, identity = current.identity, existing = current.existing)
+                is AppState.Ready -> RollNavHost(isCR = current.context.isCR, isAdmin = current.context.isAdmin)
             }
-            if (created != null || state !is AppState.Ready) {
+            if (state !is AppState.Ready) {
                 RollSnackbarHost(
                     hostState = snackbar,
                     modifier = Modifier

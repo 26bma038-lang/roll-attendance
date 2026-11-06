@@ -57,11 +57,11 @@ class TodayViewModelTest {
     private fun viewModel(scope: TestScope): TodayViewModel {
         val dispatcher = UnconfinedTestDispatcher(scope.testScheduler)
         val appScope = TestScope(dispatcher)
-        val profile = UserProfile("me", "Sahil", "23BCS1042", "s@x", "c1")
+        val profile = UserProfile("me", "Sahil", "26BMA038", "26bma038@nith.ac.in", 2026, "MA", "nith-26-ma")
         val session = AppSession(
-            auth = FakeAuthRepository(AuthUser("me", "Sahil", "s@x")),
+            auth = FakeAuthRepository(AuthUser("me", "Sahil", "26bma038@nith.ac.in")),
             profiles = FakeProfileRepository(profile),
-            classes = FakeClassRepository(RollClass("c1", "CSE DS — C", "Odd", "cr", "K7MP2X", 75, "Asia/Kolkata")),
+            classes = FakeClassRepository(RollClass("nith-26-ma", "MA 2026", "Semester 1", 2026, "MA", listOf("cr"), listOf("CR"), 75, "Asia/Kolkata", 60)),
             scope = appScope.backgroundScope,
         )
         val schedule = FakeScheduleRepository(sessions, listOf(Subject("daa", "Design and Analysis of Algorithms", "DAA", "", "", 0, false)))

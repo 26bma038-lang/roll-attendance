@@ -13,6 +13,8 @@ import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.data.preferences.ReminderSettings
 import app.roll.data.session.ClassContext
+import app.roll.data.session.Rejection
+import app.roll.domain.college.NithIdentity
 import app.roll.domain.attendance.AttendanceCalculator
 import app.roll.domain.model.Mark
 import app.roll.domain.model.Member
@@ -40,8 +42,8 @@ import app.roll.feature.manage.SessionDetailScreen
 import app.roll.feature.manage.SessionDetailUiState
 import app.roll.feature.manage.TimetableScreen
 import app.roll.feature.manage.TimetableUiState
-import app.roll.feature.onboarding.JoinOrCreateScreen
-import app.roll.feature.onboarding.JoinOrCreateUiState
+import app.roll.feature.onboarding.ProfileSetupScreen
+import app.roll.feature.onboarding.ProfileSetupUiState
 import app.roll.feature.settings.SettingsScreen
 import app.roll.feature.settings.SettingsUiState
 import app.roll.feature.subjects.SessionLine
@@ -115,14 +117,15 @@ class ScreensScreenshotTest {
         }?.let { session.id to it }
     }.toMap() + mapOf("t1" to Mark.Present, "t4" to Mark.Absent)
 
-    private val rollClass = RollClass("c1", "CSE DS — C", "Odd 2026-27", "me", "K7MP2X", 75, "Asia/Kolkata")
-    private val profile = UserProfile("me", "Sahil Verma", "23BCS1042", "sahil@college.edu", "c1")
+    private val rollClass = RollClass("nith-26-ma", "MA 2026", "Semester 1 · Odd 2026-27", 2026, "MA", listOf("me"), listOf("Sahil Verma"), 75, "Asia/Kolkata", 58)
+    private val identity = NithIdentity("26bma038@nith.ac.in", 2026, "MA", "26BMA038")
+    private val profile = UserProfile("me", "Sahil Verma", "26BMA038", "26bma038@nith.ac.in", 2026, "MA", "nith-26-ma")
     private val members = listOf(
-        Member("a", "Aarav Mehta", "23BCS1002", null),
-        Member("b", "Diya Rao", "23BCS1017", null),
-        Member("me", "Sahil Verma", "23BCS1042", null),
-        Member("d", "Kabir Singh", "23BCS1051", null),
-        Member("e", "Meera Pillai", "23BCS1063", null),
+        Member("a", "Aarav Mehta", "26BMA002", null),
+        Member("b", "Diya Rao", "26BMA017", null),
+        Member("me", "Sahil Verma", "26BMA038", null),
+        Member("d", "Kabir Singh", "26BMA051", null),
+        Member("e", "Meera Pillai", "26BMA063", null),
     )
 
     @Composable
@@ -269,19 +272,27 @@ class ScreensScreenshotTest {
     }
 
     @Test fun classSettings_light() = shot("08_class_settings_light") {
-        ClassSettingsScreen(ClassSettingsUiState(rollClass, "me", true, members), {}, { _, _, _ -> }, {}, {}, {})
+        ClassSettingsScreen(ClassSettingsUiState(rollClass, "me", members), {}, { _, _, _ -> })
     }
 
     @Test fun settings_dark() = shot("09_settings_dark", dark = true) {
         SettingsScreen(
-            SettingsUiState(ThemeMode.Dark, ReminderSettings(true, 17 * 60), ClassContext("me", profile, rollClass)),
-            {}, {}, {}, {}, {}, {}, {},
+            SettingsUiState(ThemeMode.Dark, ReminderSettings(true, 17 * 60), ClassContext("me", profile, rollClass, identity, isAdmin = true)),
+            {}, {}, {}, {}, {}, {},
         )
     }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }
 
-    @Test fun joinOrCreate_light() = shot("11_join_light") {
-        JoinOrCreateScreen(JoinOrCreateUiState(), "sahil@college.edu", false, "K7MP", {}, { _, _, _ -> }, {})
+    @Test fun signInRejected_dark() = shot("10_sign_in_rejected_dark", dark = true) {
+        SignInScreen(SignInUiState(rejection = Rejection.UnsupportedBranch("26bee001@nith.ac.in")), {})
+    }
+
+    @Test fun profileSetup_light() = shot("11_profile_light") {
+        ProfileSetupScreen(ProfileSetupUiState(), identity, "Sahil Verma", {}, {})
+    }
+
+    @Test fun profileSetup_dark() = shot("11_profile_dark", dark = true) {
+        ProfileSetupScreen(ProfileSetupUiState(), identity, "Sahil Verma", {}, {})
     }
 }

@@ -1,6 +1,5 @@
 package app.roll
 
-import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
@@ -18,8 +17,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.data.session.AppSession
 import app.roll.data.session.AppState
-import app.roll.data.session.PendingJoin
-import app.roll.domain.JoinCode
 import app.roll.domain.model.ThemeMode
 import com.google.firebase.FirebaseApp
 import dagger.hilt.android.AndroidEntryPoint
@@ -33,8 +30,6 @@ private const val MAX_SPLASH_MILLIS = 2_500L
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainActivityViewModel by viewModels()
-
-    @Inject lateinit var pendingJoin: PendingJoin
 
     /** Provider, so Firebase is only touched when it is configured. */
     @Inject lateinit var appSession: Provider<AppSession>
@@ -52,7 +47,6 @@ class MainActivity : ComponentActivity() {
             val sessionLoading = firebaseConfigured && appSession.get().state.value is AppState.Loading
             (themeLoading || sessionLoading) && SystemClock.uptimeMillis() - started < MAX_SPLASH_MILLIS
         }
-        handleDeepLink(intent)
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -71,19 +65,6 @@ class MainActivity : ComponentActivity() {
                 if (firebaseConfigured) RollApp() else FirebaseSetupNeededScreen()
             }
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleDeepLink(intent)
-    }
-
-    /** roll://join/{code} opens the join flow with the code filled in. */
-    private fun handleDeepLink(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme != "roll" || uri.host != "join") return
-        val code = JoinCode.normalize(uri.pathSegments.firstOrNull().orEmpty())
-        if (JoinCode.isValid(code)) pendingJoin.offer(code)
     }
 }
 

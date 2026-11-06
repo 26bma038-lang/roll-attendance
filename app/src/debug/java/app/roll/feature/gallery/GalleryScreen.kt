@@ -44,7 +44,6 @@ import app.roll.R
 import app.roll.core.designsystem.component.BigStat
 import app.roll.core.designsystem.component.EmptyState
 import app.roll.core.designsystem.component.HairlineDivider
-import app.roll.core.designsystem.component.JoinCodeDisplay
 import app.roll.core.designsystem.component.PAToggle
 import app.roll.core.designsystem.component.RollBottomBar
 import app.roll.core.designsystem.component.RollButton
@@ -269,7 +268,7 @@ private fun LazyListScope.subjectsSection(subjects: List<SampleSubject>) {
 }
 
 private fun LazyListScope.manageSection() {
-    item { SectionHeader("Counts, buttons, join code") }
+    item { SectionHeader("Counts and buttons") }
     item {
         Column(
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
@@ -281,7 +280,6 @@ private fun LazyListScope.manageSection() {
                 RollOutlinedButton(text = "Add class", onClick = {})
                 RollTextButton(text = "Cancel class", onClick = {}, destructive = true)
             }
-            JoinCodeDisplay(code = "K7MP2X", onCopy = {}, onShare = {})
         }
     }
     item {

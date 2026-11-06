@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Roll's mark: the P / A toggle with Present selected. Two colours, flat, inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M31,39 L77,39 A3,3 0 0 1 80,42 L80,66 A3,3 0 0 1 77,69 L31,69 A3,3 0 0 1 28,66 L28,42 A3,3 0 0 1 31,39 Z"
+        android:strokeWidth="2"
+        android:strokeColor="@color/launcher_accent"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M31,38 L54,38 L54,70 L31,70 A4,4 0 0 1 27,66 L27,42 A4,4 0 0 1 31,38 Z"
+        android:fillColor="@color/launcher_accent" />
+</vector>

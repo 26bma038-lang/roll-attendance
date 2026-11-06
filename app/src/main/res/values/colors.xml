@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors RollColors.background so there is no flash before Compose draws. -->
+    <color name="window_background">#F6F5F1</color>
+    <color name="launcher_background">#F6F5F1</color>
+    <color name="launcher_accent">#1E5E45</color>
+</resources>

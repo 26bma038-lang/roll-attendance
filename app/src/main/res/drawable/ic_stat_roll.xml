@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: the P / A toggle in one colour (Android uses only the alpha). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,6.5 L20,6.5 A1.5,1.5 0 0 1 21.5,8 L21.5,16 A1.5,1.5 0 0 1 20,17.5 L4,17.5 A1.5,1.5 0 0 1 2.5,16 L2.5,8 A1.5,1.5 0 0 1 4,6.5 Z"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFFFF"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M4,6 L12,6 L12,18 L4,18 A2,2 0 0 1 2,16 L2,8 A2,2 0 0 1 4,6 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

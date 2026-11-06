@@ -1,0 +1,232 @@
+rules_version = '2';
+
+// Roll — Firestore security rules.
+// Tested in rules-tests/ against the emulator. Keep the two in step.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function classPath(classId) {
+      return /databases/$(database)/documents/classes/$(classId);
+    }
+
+    function isCR(classId) {
+      return signedIn() && get(classPath(classId)).data.crUid == request.auth.uid;
+    }
+
+    function isMember(classId) {
+      return signedIn() && exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.auth.uid));
+    }
+
+    function canReadClass(classId) {
+      return isMember(classId) || isCR(classId);
+    }
+
+    // Only these keys, and all of them.
+    function hasExactly(data, keys) {
+      return data.keys().hasAll(keys) && data.keys().hasOnly(keys);
+    }
+
+    function validJoinCode(code) {
+      return code is string && code.matches('^[2-9A-HJ-NP-Z]{6}$');
+    }
+
+    function validMinutes(m) {
+      return m is int && m >= 0 && m < 1440;
+    }
+
+    function validType(t) {
+      return t in ['lecture', 'lab', 'tutorial'];
+    }
+
+    // "2026-11-05" -> timestamp at 00:00 UTC of that date.
+    function dateOf(d) {
+      let parts = d.split('-');
+      return timestamp.date(int(parts[0]), int(parts[1]), int(parts[2]));
+    }
+
+    // Today's date in Asia/Kolkata (UTC+5:30), as a timestamp at 00:00 UTC.
+    function istToday() {
+      let t = request.time + duration.value(330, 'm');
+      return timestamp.date(t.year(), t.month(), t.day());
+    }
+
+    // Today or the two days before it. Mirrors EditWindow in the app.
+    function inEditWindow(d) {
+      let day = dateOf(d);
+      let today = istToday();
+      return day <= today && day >= today - duration.value(2, 'd');
+    }
+
+    // ---------- users ----------
+
+    match /users/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+
+    // ---------- join codes ----------
+    // Readable one at a time by any signed-in user (never listable), so students can
+    // join without being able to enumerate classes.
+
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && validJoinCode(code)
+        && hasExactly(request.resource.data, ['classId'])
+        && getAfter(classPath(request.resource.data.classId)).data.crUid == request.auth.uid;
+      allow delete: if isCR(resource.data.classId);
+      // No updates: a code can't be pointed at a different class.
+    }
+
+    // ---------- classes ----------
+
+    function validClass(data) {
+      return hasExactly(data, ['name', 'semester', 'crUid', 'joinCode', 'requiredPercent', 'timezone', 'createdAt'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.semester is string && data.semester.size() <= 40
+        && data.crUid is string
+        && validJoinCode(data.joinCode)
+        && data.requiredPercent is int && data.requiredPercent >= 1 && data.requiredPercent <= 100
+        && data.timezone is string;
+    }
+
+    match /classes/{classId} {
+      allow read: if canReadClass(classId);
+
+      // Anyone signed in can create a class; they become its CR.
+      allow create: if signedIn()
+        && validClass(request.resource.data)
+        && request.resource.data.crUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+
+      // Only the CR updates. crUid may change only to another existing member.
+      allow update: if isCR(classId)
+        && validClass(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.crUid == resource.data.crUid
+            || exists(/databases/$(database)/documents/classes/$(classId)/members/$(request.resource.data.crUid)));
+
+      allow delete: if false;
+
+      // ---------- members ----------
+
+      match /members/{uid} {
+        allow read: if isSelf(uid) || isCR(classId);
+
+        // Join: only your own doc, and only with a code that points at this class.
+        // getAfter() lets the CR create their own member doc in the same batch as the code.
+        allow create: if isSelf(uid)
+          && hasExactly(request.resource.data, ['name', 'rollNo', 'joinedAt', 'joinCode'])
+          && request.resource.data.name is string
+          && request.resource.data.rollNo is string
+          && request.resource.data.joinedAt == request.time
+          && validJoinCode(request.resource.data.joinCode)
+          && getAfter(/databases/$(database)/documents/joinCodes/$(request.resource.data.joinCode)).data.classId == classId;
+
+        // Members may correct their own name and roll number, nothing else.
+        allow update: if isSelf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'rollNo'])
+          && request.resource.data.name is string
+          && request.resource.data.rollNo is string;
+
+        // The CR removes others. A member leaves on their own, unless they are the CR.
+        allow delete: if (isCR(classId) && uid != request.auth.uid)
+          || (isSelf(uid) && get(classPath(classId)).data.crUid != uid);
+      }
+
+      // ---------- subjects, timetable ----------
+
+      match /subjects/{subjectId} {
+        allow read: if canReadClass(classId);
+        allow create, update: if isCR(classId)
+          && hasExactly(request.resource.data, ['name', 'shortName', 'code', 'faculty', 'colorIndex', 'archived'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0
+          && request.resource.data.shortName is string && request.resource.data.shortName.size() > 0
+          && request.resource.data.colorIndex is int
+          && request.resource.data.archived is bool;
+        allow delete: if isCR(classId);
+      }
+
+      match /timetable/{slotId} {
+        allow read: if canReadClass(classId);
+        allow create, update: if isCR(classId)
+          && hasExactly(request.resource.data, ['dayOfWeek', 'startMinutes', 'endMinutes', 'subjectId', 'type', 'room'])
+          && request.resource.data.dayOfWeek is int
+          && request.resource.data.dayOfWeek >= 1 && request.resource.data.dayOfWeek <= 7
+          && validMinutes(request.resource.data.startMinutes)
+          && validMinutes(request.resource.data.endMinutes)
+          && request.resource.data.endMinutes > request.resource.data.startMinutes
+          && validType(request.resource.data.type);
+        allow delete: if isCR(classId);
+      }
+
+      // ---------- sessions ----------
+
+      function validSession(data) {
+        return hasExactly(data, ['subjectId', 'date', 'startMinutes', 'endMinutes', 'type', 'status',
+                                 'note', 'room', 'weight', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+          && data.subjectId is string
+          && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && validMinutes(data.startMinutes)
+          && validMinutes(data.endMinutes)
+          && data.endMinutes > data.startMinutes
+          && validType(data.type)
+          && data.status in ['scheduled', 'cancelled', 'deleted']
+          && data.note is string && data.note.size() <= 200
+          && data.room is string
+          && data.weight is int && data.weight >= 1 && data.weight <= 4
+          && data.updatedAt == request.time;
+      }
+
+      match /sessions/{sessionId} {
+        allow read: if canReadClass(classId);
+        allow create: if isCR(classId)
+          && validSession(request.resource.data)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if isCR(classId)
+          && validSession(request.resource.data)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isCR(classId);
+
+        // ---------- marks ----------
+        // One doc per student per session, id = their uid. "cleared" is a tombstone so
+        // other devices syncing incrementally see the mark removed.
+
+        match /marks/{uid} {
+          allow read: if isSelf(uid) || isCR(classId);
+
+          allow create, update: if isSelf(uid)
+            && isMember(classId)
+            && hasExactly(request.resource.data, ['status', 'markedAt', 'uid', 'classId', 'sessionId'])
+            && request.resource.data.status in ['present', 'absent', 'cleared']
+            && request.resource.data.markedAt == request.time
+            && request.resource.data.uid == uid
+            && request.resource.data.classId == classId
+            && request.resource.data.sessionId == sessionId
+            && get(/databases/$(database)/documents/classes/$(classId)/sessions/$(sessionId)).data.status == 'scheduled'
+            && inEditWindow(get(/databases/$(database)/documents/classes/$(classId)/sessions/$(sessionId)).data.date);
+
+          // Only the CR, when deleting a session.
+          allow delete: if isCR(classId);
+        }
+      }
+    }
+
+    // A student's own marks across all sessions, for computing percentages on device.
+    match /{path=**}/marks/{uid} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}

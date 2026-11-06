@@ -1,0 +1,22 @@
+.gradle/
+.kotlin/
+build/
+/local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+/app/google-services.json
+*.jks
+*.keystore
+node_modules/
+
+keystore.properties
+keystore/
+
+# Firebase emulator logs and local state
+*.log
+.firebase/
+.firebaserc

@@ -25,6 +25,7 @@ object RollIcons {
     @DrawableRes val Remove = R.drawable.ic_remove
     @DrawableRes val ExpandMore = R.drawable.ic_expand_more
     @DrawableRes val RemoveMember = R.drawable.ic_person_remove
+    @DrawableRes val Department = R.drawable.ic_account_balance
     @DrawableRes val Admin = R.drawable.ic_admin_panel_settings
     @DrawableRes val Search = R.drawable.ic_search
     @DrawableRes val OpenExternal = R.drawable.ic_open_in_new

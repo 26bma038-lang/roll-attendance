@@ -30,6 +30,11 @@ import app.roll.feature.admin.AdminClassScreen
 import app.roll.feature.admin.AdminClassUiState
 import app.roll.feature.admin.AdminHomeScreen
 import app.roll.feature.admin.AdminHomeUiState
+import app.roll.feature.admin.AdminDepartmentScreen
+import app.roll.feature.department.DepartmentScreen
+import app.roll.feature.department.DepartmentUiState
+import app.roll.domain.model.Department
+import app.roll.domain.model.DepartmentLink
 import app.roll.feature.auth.SignInScreen
 import app.roll.feature.auth.SignInUiState
 import app.roll.feature.common.sessionItems
@@ -296,6 +301,22 @@ class ScreensScreenshotTest {
     @Test fun adminHome_dark() = shot("12_admin_home_dark", dark = true) { AdminHomeScreen(AdminHomeUiState(false, otherClasses), {}, {}, {}, {}) }
     @Test fun adminClass_light() = shot("13_admin_class_light") { AdminClassScreen(AdminClassUiState(false, rollClass, members), {}, {}, {}) }
     @Test fun adminClass_dark() = shot("13_admin_class_dark", dark = true) { AdminClassScreen(AdminClassUiState(false, rollClass, members), {}, {}, {}) }
+
+    private fun departmentState() = DepartmentUiState(
+        rollClass = rollClass,
+        today = today,
+        slots = todaySessions.mapIndexed { i, it -> TimetableSlot("s$i", today.dayOfWeek.value, it.startMinutes, it.endMinutes, it.subjectId, it.type, it.room) } +
+            todaySessions.take(3).mapIndexed { i, it -> TimetableSlot("m$i", 1, it.startMinutes, it.endMinutes, it.subjectId, it.type, it.room) },
+        subjects = subjects,
+        department = Department(code = "MA", name = "Mathematics and Computing", office = "Ground floor, Block B", links = listOf(DepartmentLink("Department page", "https://nith.ac.in"))),
+        classesHeld = 42,
+    )
+
+    @Test fun department_light() = shot("14_department_light", tabs = true, selected = 3) { DepartmentScreen(departmentState(), {}) }
+    @Test fun department_dark() = shot("14_department_dark", dark = true, tabs = true, selected = 3) { DepartmentScreen(departmentState(), {}) }
+    @Test fun adminDepartment_light() = shot("15_admin_department_light") {
+        AdminDepartmentScreen(Department(code = "MA", name = "Mathematics and Computing", links = listOf(DepartmentLink("Department page", "https://nith.ac.in"))), {}, {})
+    }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }
 

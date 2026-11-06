@@ -25,7 +25,10 @@ import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.theme.Motion
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.feature.admin.AdminClassRoute
+import app.roll.feature.admin.AdminDepartmentRoute
+import app.roll.feature.admin.AdminDepartmentsScreen
 import app.roll.feature.admin.AdminHomeRoute
+import app.roll.feature.department.DepartmentRoute
 import app.roll.feature.history.DayRoute
 import app.roll.feature.history.HistoryRoute
 import app.roll.feature.manage.ClassSettingsRoute
@@ -51,11 +54,14 @@ import kotlinx.serialization.Serializable
 @Serializable data object SettingsDest
 @Serializable data object AdminDest
 @Serializable data class AdminClassDest(val classId: String)
+@Serializable data object AdminDepartmentsDest
+@Serializable data class AdminDepartmentDest(val code: String)
 
 private enum class Tab(val label: String, val icon: Int) {
     Today("Today", RollIcons.Today),
     Subjects("Subjects", RollIcons.Subjects),
     History("History", RollIcons.History),
+    Department("Department", RollIcons.Department),
     Manage("Manage", RollIcons.Manage),
 }
 
@@ -109,13 +115,24 @@ fun RollNavHost(
                 AdminHomeRoute(
                     onBack = navController::popBackStack,
                     onOpenClass = { navController.navigate(AdminClassDest(it)) },
-                    onOpenDepartments = {},
+                    onOpenDepartments = { navController.navigate(AdminDepartmentsDest) },
                     onOpenCollegeNotices = {},
                 )
             }
         }
         composable<AdminClassDest> {
             Screen { AdminClassRoute(onBack = navController::popBackStack) }
+        }
+        composable<AdminDepartmentsDest> {
+            Screen {
+                AdminDepartmentsScreen(
+                    onBack = navController::popBackStack,
+                    onOpen = { navController.navigate(AdminDepartmentDest(it)) },
+                )
+            }
+        }
+        composable<AdminDepartmentDest> {
+            Screen { AdminDepartmentRoute(onBack = navController::popBackStack) }
         }
     }
 }
@@ -173,6 +190,7 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
                     onManageSubjects = { navController.navigate(ManageSubjectsDest) },
                 )
                 Tab.History -> HistoryRoute(onOpenDay = openDay, onOpenSettings = openSettings)
+                Tab.Department -> DepartmentRoute(onOpenSettings = openSettings)
                 Tab.Manage -> ManageRoute(
                     onOpenSession = { navController.navigate(SessionDetailDest(it)) },
                     onOpenTimetable = { navController.navigate(TimetableDest) },

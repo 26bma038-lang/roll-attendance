@@ -4,6 +4,8 @@ import app.roll.data.auth.AuthRepository
 import app.roll.data.auth.FirebaseAuthRepository
 import app.roll.data.classes.ClassRepository
 import app.roll.data.classes.FirestoreClassRepository
+import app.roll.data.college.DepartmentRepository
+import app.roll.data.college.FirestoreDepartmentRepository
 import app.roll.data.marks.FirestoreMarkRepository
 import app.roll.data.marks.MarkRepository
 import app.roll.data.profile.FirestoreProfileRepository
@@ -23,4 +25,5 @@ abstract class DataModule {
     @Binds abstract fun bindsClasses(impl: FirestoreClassRepository): ClassRepository
     @Binds abstract fun bindsSchedule(impl: FirestoreScheduleRepository): ScheduleRepository
     @Binds abstract fun bindsMarks(impl: FirestoreMarkRepository): MarkRepository
+    @Binds abstract fun bindsDepartments(impl: FirestoreDepartmentRepository): DepartmentRepository
 }

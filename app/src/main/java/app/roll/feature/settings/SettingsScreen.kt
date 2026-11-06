@@ -70,6 +70,7 @@ data class SettingsUiState(
     val context: ClassContext? = null,
     val busy: Boolean = false,
     val deadlineReminders: Boolean = true,
+    val classEndPrompts: Boolean = true,
 )
 
 @HiltViewModel
@@ -91,13 +92,17 @@ class SettingsViewModel @Inject constructor(
         preferences.reminder,
         context,
         busy,
-        preferences.deadlineReminders,
-    ) { theme, reminder, ctx, isBusy, deadlines ->
-        SettingsUiState(theme, reminder, ctx, isBusy, deadlines)
+        combine(preferences.deadlineReminders, preferences.classEndPrompts, ::Pair),
+    ) { theme, reminder, ctx, isBusy, (deadlines, classEnd) ->
+        SettingsUiState(theme, reminder, ctx, isBusy, deadlines, classEnd)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch { preferences.setThemeMode(mode) }
+    }
+
+    fun setClassEndPrompts(enabled: Boolean) {
+        viewModelScope.launch { preferences.setClassEndPrompts(enabled) }
     }
 
     fun setDeadlineReminders(enabled: Boolean) {
@@ -162,6 +167,7 @@ fun SettingsRoute(
         onTheme = viewModel::setTheme,
         onReminder = viewModel::setReminder,
         onDeadlineReminders = viewModel::setDeadlineReminders,
+        onClassEndPrompts = viewModel::setClassEndPrompts,
         onSignOut = viewModel::signOut,
         onDelete = { viewModel.deleteAccount(context) },
         onOpenAdmin = onOpenAdmin,
@@ -175,6 +181,7 @@ fun SettingsScreen(
     onTheme: (ThemeMode) -> Unit,
     onReminder: (ReminderSettings) -> Unit,
     onDeadlineReminders: (Boolean) -> Unit,
+    onClassEndPrompts: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     onDelete: () -> Unit,
     onOpenAdmin: () -> Unit,
@@ -224,8 +231,20 @@ fun SettingsScreen(
                 }
             }
 
-            SectionHeader("Deadlines")
+            SectionHeader("Notifications")
             ListGroup {
+                ToggleRow(
+                    title = "Mark from a notification",
+                    subtitle = "When each class ends, with Present and Absent buttons",
+                    checked = uiState.classEndPrompts,
+                    onToggle = { enable ->
+                        if (enable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            deadlinePermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        onClassEndPrompts(enable)
+                    },
+                )
+                HairlineDivider(startIndent = Spacing.gutter)
                 ToggleRow(
                     title = "Deadline reminders",
                     subtitle = "24 hours and 2 hours before anything you haven't ticked done",

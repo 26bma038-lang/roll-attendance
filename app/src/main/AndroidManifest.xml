@@ -27,6 +27,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Home-screen widget: today's classes and the next deadline. -->
+        <receiver
+            android:name=".feature.widget.RollWidgetReceiver"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/roll_widget_info" />
+        </receiver>
+
+        <!-- Present / Absent buttons on the class-end notification. -->
+        <receiver
+            android:name=".feature.classend.MarkActionReceiver"
+            android:exported="false" />
+
         <!-- WorkManager uses Hilt's worker factory, provided by RollApplication. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

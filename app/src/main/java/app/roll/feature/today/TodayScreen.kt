@@ -1,6 +1,12 @@
 package app.roll.feature.today
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,6 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -39,16 +48,19 @@ import app.roll.core.designsystem.component.EmptyState
 import app.roll.core.designsystem.component.HairlineDivider
 import app.roll.core.designsystem.component.OfflineLine
 import app.roll.core.designsystem.component.RollIconButton
+import app.roll.core.designsystem.component.RollTextButton
 import app.roll.core.designsystem.component.RollTopAppBar
 import app.roll.core.designsystem.component.SectionHeader
 import app.roll.core.designsystem.component.SkeletonList
 import app.roll.core.designsystem.icon.RollIcons
+import app.roll.core.designsystem.theme.RollShapes
 import app.roll.core.designsystem.theme.RollTheme
 import app.roll.core.designsystem.theme.Sizes
 import app.roll.core.designsystem.theme.Spacing
 import app.roll.core.util.formatClock
 import app.roll.core.util.formatDayHeader
 import app.roll.data.marks.MarkRepository
+import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.session.AppSession
 import app.roll.data.session.ClassContext
@@ -104,7 +116,16 @@ class TodayViewModel @Inject constructor(
     time: TimeSource,
     private val schedule: ScheduleRepository,
     private val messages: UserMessages,
+    private val preferences: UserPreferencesRepository,
 ) : ViewModel() {
+
+    /** Whether the one-time notification explanation was answered. Starts true so it never flashes. */
+    val notificationPromptDone: StateFlow<Boolean> =
+        preferences.notificationPromptDone.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun onNotificationPromptAnswered() {
+        viewModelScope.launch { preferences.setNotificationPromptDone() }
+    }
 
     private val controller = MarkController(marks)
     private val refreshing = MutableStateFlow(false)
@@ -193,6 +214,13 @@ fun TodayRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     MarkClearedSnackbar(uiState.clearedMark, onUndo = viewModel::onUndo, onDismiss = viewModel::onUndoDismissed)
+    val promptDone by viewModel.notificationPromptDone.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.onNotificationPromptAnswered()
+    }
     TodayScreen(
         uiState = uiState,
         onMark = viewModel::onMark,
@@ -201,6 +229,11 @@ fun TodayRoute(
         onOpenDay = onOpenDay,
         onOpenAdmin = onOpenAdmin,
         onOpenAssignment = onOpenAssignment,
+        showNotificationPrompt = needsPermission && !promptDone && !uiState.loading,
+        onEnableNotifications = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        },
+        onDismissNotifications = viewModel::onNotificationPromptAnswered,
     )
 }
 
@@ -215,6 +248,9 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     onOpenAdmin: (() -> Unit)? = null,
     onOpenAssignment: (String) -> Unit = {},
+    showNotificationPrompt: Boolean = false,
+    onEnableNotifications: () -> Unit = {},
+    onDismissNotifications: () -> Unit = {},
 ) {
     val colors = RollTheme.colors
     Column(modifier.fillMaxSize()) {
@@ -250,6 +286,9 @@ fun TodayScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 val date = uiState.date
+                if (showNotificationPrompt) {
+                    item(key = "notificationPrompt") { NotificationPrompt(onEnableNotifications, onDismissNotifications) }
+                }
                 if (uiState.pinnedNotices.isNotEmpty()) {
                     item(key = "notices") { PinnedNoticesBlock(uiState.pinnedNotices) }
                 }
@@ -330,5 +369,33 @@ private fun YesterdayRow(count: Int, onClick: () -> Unit) {
             )
         }
         HairlineDivider()
+    }
+}
+
+/** The one-time, plain explanation before Android asks for notification permission. */
+@Composable
+private fun NotificationPrompt(onEnable: () -> Unit, onDismiss: () -> Unit) {
+    val colors = RollTheme.colors
+    Column(
+        Modifier
+            .padding(horizontal = Spacing.gutter, vertical = Spacing.sm)
+            .fillMaxWidth()
+            .border(1.dp, colors.outline, RollShapes.control)
+            .padding(start = Spacing.md, end = Spacing.md, top = Spacing.md),
+    ) {
+        Text(
+            text = "Mark from a notification",
+            style = RollTheme.typography.bodyStrong,
+            color = colors.ink,
+        )
+        Text(
+            text = "When a class ends, Roll can ask Present or Absent in a notification, and remind you before deadlines. Nothing else.",
+            style = RollTheme.typography.caption,
+            color = colors.inkSecondary,
+        )
+        Row {
+            RollTextButton(text = "Turn on", onClick = onEnable, alignTextToStart = true)
+            RollTextButton(text = "Not now", onClick = onDismiss)
+        }
     }
 }

@@ -18,6 +18,8 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +36,13 @@ interface MarkRepository {
 
     /** `null` clears the mark. Works offline; queued until there is a connection. */
     fun setMark(classId: String, sessionId: String, uid: String, mark: Mark?)
+
+    /**
+     * Same as [setMark], for background work (notification actions, widget): waits until the
+     * server confirms or [timeoutMillis] passes. Offline, the write is already saved locally and
+     * syncs later.
+     */
+    suspend fun setMarkAndWait(classId: String, sessionId: String, uid: String, mark: Mark?, timeoutMillis: Long = 8_000)
 
     /** CR only: every member's mark for one session. */
     fun observeSessionMarks(classId: String, sessionId: String): Flow<List<MemberMark>>
@@ -73,20 +82,25 @@ class FirestoreMarkRepository @Inject constructor(
         }
     }
 
+    private fun markData(classId: String, sessionId: String, uid: String, mark: Mark?) = mapOf(
+        "status" to (mark?.wire() ?: F.STATUS_CLEARED),
+        F.MARKED_AT to FieldValue.serverTimestamp(),
+        F.UID to uid,
+        F.CLASS_ID to classId,
+        "sessionId" to sessionId,
+    )
+
     override fun setMark(classId: String, sessionId: String, uid: String, mark: Mark?) {
         markDoc(classId, sessionId, uid)
-            .set(
-                mapOf(
-                    "status" to (mark?.wire() ?: F.STATUS_CLEARED),
-                    F.MARKED_AT to FieldValue.serverTimestamp(),
-                    F.UID to uid,
-                    F.CLASS_ID to classId,
-                    "sessionId" to sessionId,
-                ),
-            )
+            .set(markData(classId, sessionId, uid, mark))
             .reportFailure {
                 messages.show("That mark wasn't saved: the class may be cancelled or outside the 2-day edit window.")
             }
+    }
+
+    override suspend fun setMarkAndWait(classId: String, sessionId: String, uid: String, mark: Mark?, timeoutMillis: Long) {
+        val task = markDoc(classId, sessionId, uid).set(markData(classId, sessionId, uid, mark))
+        withTimeoutOrNull(timeoutMillis) { runCatching { task.await() } }
     }
 
     override fun observeSessionMarks(classId: String, sessionId: String): Flow<List<MemberMark>> =

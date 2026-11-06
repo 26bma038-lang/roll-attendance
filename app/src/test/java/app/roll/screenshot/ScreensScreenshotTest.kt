@@ -46,6 +46,9 @@ import app.roll.feature.deadlines.deadlineItem
 import app.roll.domain.model.Notice
 import app.roll.feature.notices.CollegeNoticesScreen
 import app.roll.feature.notices.CollegeNoticesUiState
+import app.roll.feature.subjects.LeavePlannerScreen
+import app.roll.feature.subjects.LeavePlannerUiState
+import app.roll.feature.subjects.LeaveRow
 import app.roll.feature.auth.SignInScreen
 import app.roll.feature.auth.SignInUiState
 import app.roll.feature.common.sessionItems
@@ -299,7 +302,7 @@ class ScreensScreenshotTest {
     @Test fun settings_dark() = shot("09_settings_dark", dark = true) {
         SettingsScreen(
             SettingsUiState(ThemeMode.Dark, ReminderSettings(true, 17 * 60), ClassContext("me", profile, rollClass, identity, isAdmin = true)),
-            {}, {}, {}, {}, {}, {}, {},
+            {}, {}, {}, {}, {}, {}, {}, {},
         )
     }
 
@@ -394,6 +397,28 @@ class ScreensScreenshotTest {
 
     @Test fun collegeNotices_light() = shot("21_college_notices_light") {
         CollegeNoticesScreen(CollegeNoticesUiState(sampleNotices.filter { it.college }, today), {}, {}, { _, _ -> }, {})
+    }
+
+    private fun leaveState(): LeavePlannerUiState {
+        val slots = todaySessions.filter { it.status == SessionStatus.Scheduled }.flatMap { s ->
+            listOf(1, 3, 4).map { day -> TimetableSlot("${s.id}-$day", day, s.startMinutes, s.endMinutes, s.subjectId, s.type, s.room) }
+        }
+        val picked = setOf(today.plusDays(4), today.plusDays(6))
+        val impacts = app.roll.domain.planning.LeavePlanner.plan(picked, subjects.map { it.id }, pastSessions + todaySessions, slots, marks, now, 75)
+        return LeavePlannerUiState(
+            today = today,
+            month = YearMonth.from(today),
+            selected = picked,
+            requiredPercent = 75,
+            rows = subjects.zip(impacts) { s, i -> LeaveRow(s, i) }.sortedByDescending { it.impact.missed > 0 },
+        )
+    }
+
+    @Test fun leavePlanner_light() = shot("22_leave_planner_light") { LeavePlannerScreen(leaveState(), {}, {}, {}, {}) }
+    @Test fun leavePlanner_dark() = shot("22_leave_planner_dark", dark = true) { LeavePlannerScreen(leaveState(), {}, {}, {}, {}) }
+
+    @Test fun todayNotificationPrompt_light() = shot("23_today_prompt_light", tabs = true) {
+        TodayScreen(todayState(), { _, _ -> }, {}, {}, {}, showNotificationPrompt = true)
     }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }

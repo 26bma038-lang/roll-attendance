@@ -11,6 +11,8 @@ import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
 import app.roll.data.notices.NoticeDraft
 import app.roll.data.notices.NoticeRepository
+import app.roll.data.preferences.ReminderSettings
+import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.profile.ProfileRepository
 import app.roll.data.profile.ProfileSnapshot
 import app.roll.data.schedule.ScheduleRepository
@@ -25,6 +27,7 @@ import app.roll.domain.model.Notice
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Session
 import app.roll.domain.model.Subject
+import app.roll.domain.model.ThemeMode
 import app.roll.domain.model.TimetableSlot
 import app.roll.domain.model.UserProfile
 import app.roll.domain.schedule.SessionDraft
@@ -115,6 +118,8 @@ class FakeMarkRepository : MarkRepository {
         writes += sessionId to mark
         marks.value = if (mark == null) marks.value - sessionId else marks.value + (sessionId to mark)
     }
+    override suspend fun setMarkAndWait(classId: String, sessionId: String, uid: String, mark: Mark?, timeoutMillis: Long) =
+        setMark(classId, sessionId, uid, mark)
     override fun observeSessionMarks(classId: String, sessionId: String): Flow<List<MemberMark>> = flowOf(emptyList())
 }
 
@@ -139,4 +144,27 @@ class FakeNoticeRepository : NoticeRepository {
     override fun post(classId: String?, draft: NoticeDraft, authorName: String) = Unit
     override fun setPinned(classId: String?, notice: Notice, pinned: Boolean) = Unit
     override fun delete(classId: String?, notice: Notice) = Unit
+}
+
+class FakePreferences : UserPreferencesRepository {
+    override val themeMode = MutableStateFlow(ThemeMode.System)
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        themeMode.value = mode
+    }
+    override val reminder = MutableStateFlow(ReminderSettings())
+    override suspend fun setReminder(settings: ReminderSettings) {
+        reminder.value = settings
+    }
+    override val deadlineReminders = MutableStateFlow(true)
+    override suspend fun setDeadlineReminders(enabled: Boolean) {
+        deadlineReminders.value = enabled
+    }
+    override val classEndPrompts = MutableStateFlow(true)
+    override suspend fun setClassEndPrompts(enabled: Boolean) {
+        classEndPrompts.value = enabled
+    }
+    override val notificationPromptDone = MutableStateFlow(false)
+    override suspend fun setNotificationPromptDone() {
+        notificationPromptDone.value = true
+    }
 }

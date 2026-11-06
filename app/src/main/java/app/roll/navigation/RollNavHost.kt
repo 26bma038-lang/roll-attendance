@@ -40,6 +40,7 @@ import app.roll.feature.manage.SessionDetailRoute
 import app.roll.feature.manage.TimetableRoute
 import app.roll.feature.notices.CollegeNoticesRoute
 import app.roll.feature.settings.SettingsRoute
+import app.roll.feature.subjects.LeavePlannerRoute
 import app.roll.feature.subjects.SubjectDetailRoute
 import app.roll.feature.subjects.SubjectsRoute
 import app.roll.feature.today.TodayRoute
@@ -51,6 +52,7 @@ import java.time.LocalDate
 @Serializable data object MainDest
 @Serializable data class SubjectDetailDest(val subjectId: String)
 @Serializable data object HistoryDest
+@Serializable data object LeavePlannerDest
 @Serializable data class DayDest(val date: String)
 @Serializable data class AssignmentDetailDest(val assignmentId: String)
 @Serializable data class SessionDetailDest(val sessionId: String)
@@ -98,6 +100,7 @@ fun RollNavHost(
             Screen { HistoryRoute(onOpenDay = { navController.navigate(DayDest(it.toString())) }, onBack = back) }
         }
         composable<DayDest> { Screen { DayRoute(onBack = back) } }
+        composable<LeavePlannerDest> { Screen { LeavePlannerRoute(onBack = back) } }
         composable<AssignmentDetailDest> { Screen { AssignmentDetailRoute(onBack = back) } }
         composable<SessionDetailDest> { Screen { SessionDetailRoute(onBack = back) } }
         composable<TimetableDest> { Screen { TimetableRoute(onBack = back) } }
@@ -180,6 +183,7 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
                     onOpenSettings = openSettings,
                     onManageSubjects = { navController.navigate(ManageSubjectsDest) },
                     onOpenHistory = { navController.navigate(HistoryDest) },
+                    onPlanLeave = { navController.navigate(LeavePlannerDest) },
                 )
                 Tab.Department -> DepartmentRoute(onOpenSettings = openSettings)
                 Tab.Manage -> ManageRoute(

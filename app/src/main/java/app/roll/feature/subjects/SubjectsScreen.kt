@@ -22,6 +22,7 @@ import app.roll.core.designsystem.component.BigStat
 import app.roll.core.designsystem.component.EmptyState
 import app.roll.core.designsystem.component.HairlineDivider
 import app.roll.core.designsystem.component.RollIconButton
+import app.roll.core.designsystem.component.RollTextButton
 import app.roll.core.designsystem.component.RollTopAppBar
 import app.roll.core.designsystem.component.SectionHeader
 import app.roll.core.designsystem.component.SkeletonList
@@ -111,10 +112,11 @@ fun SubjectsRoute(
     onOpenSettings: () -> Unit,
     onManageSubjects: () -> Unit,
     onOpenHistory: () -> Unit,
+    onPlanLeave: () -> Unit,
     viewModel: SubjectsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    SubjectsScreen(uiState, onOpenSubject, onOpenSettings, onManageSubjects, onOpenHistory = onOpenHistory)
+    SubjectsScreen(uiState, onOpenSubject, onOpenSettings, onManageSubjects, onOpenHistory = onOpenHistory, onPlanLeave = onPlanLeave)
 }
 
 @Composable
@@ -125,6 +127,7 @@ fun SubjectsScreen(
     onManageSubjects: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenHistory: () -> Unit = {},
+    onPlanLeave: () -> Unit = {},
 ) {
     val colors = RollTheme.colors
     Column(modifier.fillMaxSize()) {
@@ -163,7 +166,13 @@ fun SubjectsScreen(
                                 AttendanceCopy.unmarkedNote(uiState.overall.unmarkedPastCount),
                             ).joinToString(" · "),
                             warning = below,
-                            modifier = Modifier.padding(start = Spacing.gutter, end = Spacing.gutter, top = Spacing.sm, bottom = Spacing.lg),
+                            modifier = Modifier.padding(start = Spacing.gutter, end = Spacing.gutter, top = Spacing.sm),
+                        )
+                        RollTextButton(
+                            text = "Plan leave",
+                            onClick = onPlanLeave,
+                            alignTextToStart = true,
+                            modifier = Modifier.padding(start = Spacing.gutter, bottom = Spacing.sm),
                         )
                     }
                     val firstArchived = uiState.subjects.indexOfFirst { it.subject.archived }

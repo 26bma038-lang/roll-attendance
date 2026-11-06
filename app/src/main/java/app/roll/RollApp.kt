@@ -34,9 +34,11 @@ import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.session.AppSession
 import app.roll.data.session.AppState
 import app.roll.feature.auth.SignInRoute
+import app.roll.feature.classend.ClassEndSync
 import app.roll.feature.deadlines.DeadlineReminderSync
 import app.roll.feature.onboarding.ProfileSetupRoute
 import app.roll.feature.settings.ReminderScheduler
+import app.roll.feature.widget.RollWidgetSync
 import app.roll.navigation.RollNavHost
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
@@ -53,6 +55,8 @@ class RootViewModel @Inject constructor(
     preferences: UserPreferencesRepository,
     reminders: ReminderScheduler,
     deadlineReminders: DeadlineReminderSync,
+    classEndPrompts: ClassEndSync,
+    widget: RollWidgetSync,
 ) : ViewModel() {
     val state: StateFlow<AppState> = session.state
     val messages: SharedFlow<String> = messages.messages
@@ -62,6 +66,9 @@ class RootViewModel @Inject constructor(
         viewModelScope.launch { reminders.apply(preferences.reminder.first()) }
         // Keep deadline notifications in step with assignments while the app is open.
         deadlineReminders.start(viewModelScope)
+        // Plan today's "mark attendance" notifications, and keep the home-screen widget current.
+        classEndPrompts.start(viewModelScope)
+        widget.start(viewModelScope)
     }
 }
 

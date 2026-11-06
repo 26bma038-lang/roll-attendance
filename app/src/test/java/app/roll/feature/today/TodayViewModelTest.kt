@@ -17,6 +17,7 @@ import app.roll.testing.FakeAuthRepository
 import app.roll.testing.FakeClassRepository
 import app.roll.testing.FakeMarkRepository
 import app.roll.testing.FakeNoticeRepository
+import app.roll.testing.FakePreferences
 import app.roll.testing.FakeProfileRepository
 import app.roll.testing.FakeScheduleRepository
 import app.roll.testing.FakeTimeSource
@@ -75,6 +76,7 @@ class TodayViewModelTest {
             time = FakeTimeSource(today.atTime(12, 0).atZone(zone).toInstant()),
             schedule = schedule,
             messages = UserMessages(),
+            preferences = FakePreferences(),
         )
     }
 

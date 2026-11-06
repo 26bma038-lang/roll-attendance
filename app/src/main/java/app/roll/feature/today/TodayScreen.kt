@@ -34,11 +34,13 @@ import app.roll.R
 import app.roll.core.common.TimeSource
 import app.roll.core.common.UserMessages
 import app.roll.core.common.localDateTimeIn
+import app.roll.core.common.zoneOf
 import app.roll.core.designsystem.component.EmptyState
 import app.roll.core.designsystem.component.HairlineDivider
 import app.roll.core.designsystem.component.OfflineLine
 import app.roll.core.designsystem.component.RollIconButton
 import app.roll.core.designsystem.component.RollTopAppBar
+import app.roll.core.designsystem.component.SectionHeader
 import app.roll.core.designsystem.component.SkeletonList
 import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.theme.RollTheme
@@ -52,6 +54,7 @@ import app.roll.data.session.AppSession
 import app.roll.data.session.ClassContext
 import app.roll.data.session.ClassData
 import app.roll.domain.attendance.SessionState
+import app.roll.domain.deadlines.Deadlines
 import app.roll.domain.model.Mark
 import app.roll.feature.common.AttendanceCopy
 import app.roll.feature.common.ClearedMark
@@ -60,6 +63,9 @@ import app.roll.feature.common.MarkController
 import app.roll.feature.common.SessionItem
 import app.roll.feature.common.SessionItemRow
 import app.roll.feature.common.sessionItems
+import app.roll.feature.deadlines.DeadlineItem
+import app.roll.feature.deadlines.DeadlineRow
+import app.roll.feature.deadlines.deadlineItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -83,6 +89,7 @@ data class TodayUiState(
     val clearedMark: ClearedMark? = null,
     /** Set when the class has no CR yet, e.g. "MA 2026". */
     val noCrClassName: String? = null,
+    val dueSoon: List<DeadlineItem> = emptyList(),
 )
 
 @HiltViewModel
@@ -130,8 +137,21 @@ class TodayViewModel @Inject constructor(
         )
     }
 
-    val uiState: StateFlow<TodayUiState> = combine(content, refreshing, controller.cleared) { state, isRefreshing, cleared ->
-        state.copy(refreshing = isRefreshing, clearedMark = cleared)
+    /** Not done and due in the next 48 hours, for the strip above today's classes. */
+    private val dueSoon = combine(
+        combine(session.context, time.ticks(), ::Pair),
+        classData.assignments,
+        classData.doneIds,
+        classData.subjects,
+    ) { (ctx, now), assignments, done, subjects ->
+        val zone = zoneOf(ctx.rollClass.timezone)
+        val doneIds = done.orEmpty()
+        val subjectMap = subjects.orEmpty().associateBy { it.id }
+        Deadlines.dueSoon(assignments.orEmpty(), doneIds, now).map { deadlineItem(it, subjectMap, doneIds, now, zone) }
+    }
+
+    val uiState: StateFlow<TodayUiState> = combine(content, refreshing, controller.cleared, dueSoon) { state, isRefreshing, cleared, soon ->
+        state.copy(refreshing = isRefreshing, clearedMark = cleared, dueSoon = soon)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
     fun onMark(item: SessionItem, mark: Mark?) {
@@ -160,6 +180,7 @@ fun TodayRoute(
     onOpenSettings: () -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onOpenAdmin: (() -> Unit)?,
+    onOpenAssignment: (String) -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -171,6 +192,7 @@ fun TodayRoute(
         onOpenSettings = onOpenSettings,
         onOpenDay = onOpenDay,
         onOpenAdmin = onOpenAdmin,
+        onOpenAssignment = onOpenAssignment,
     )
 }
 
@@ -184,6 +206,7 @@ fun TodayScreen(
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
     onOpenAdmin: (() -> Unit)? = null,
+    onOpenAssignment: (String) -> Unit = {},
 ) {
     val colors = RollTheme.colors
     Column(modifier.fillMaxSize()) {
@@ -223,6 +246,16 @@ fun TodayScreen(
                     item(key = "yesterday") {
                         YesterdayRow(count = uiState.yesterdayUnmarked, onClick = { onOpenDay(date.minusDays(1)) })
                     }
+                }
+                if (uiState.dueSoon.isNotEmpty()) {
+                    item(key = "dueSoonHeader") { SectionHeader("Due soon") }
+                    itemsIndexed(uiState.dueSoon, key = { _, it -> "due-${it.assignment.id}" }) { index, item ->
+                        Column(Modifier.background(colors.surface)) {
+                            if (index > 0) HairlineDivider(startIndent = Spacing.gutter)
+                            DeadlineRow(item = item, onClick = { onOpenAssignment(item.assignment.id) }, onDoneChange = null)
+                        }
+                    }
+                    item(key = "classesHeader") { SectionHeader("Classes") }
                 }
                 when {
                     uiState.loading -> item(key = "skeleton") {

@@ -110,10 +110,11 @@ fun SubjectsRoute(
     onOpenSubject: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onManageSubjects: () -> Unit,
+    onOpenHistory: () -> Unit,
     viewModel: SubjectsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    SubjectsScreen(uiState, onOpenSubject, onOpenSettings, onManageSubjects)
+    SubjectsScreen(uiState, onOpenSubject, onOpenSettings, onManageSubjects, onOpenHistory = onOpenHistory)
 }
 
 @Composable
@@ -123,10 +124,12 @@ fun SubjectsScreen(
     onOpenSettings: () -> Unit,
     onManageSubjects: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenHistory: () -> Unit = {},
 ) {
     val colors = RollTheme.colors
     Column(modifier.fillMaxSize()) {
         RollTopAppBar(title = "Subjects") {
+            RollIconButton(icon = RollIcons.History, contentDescription = "History calendar", onClick = onOpenHistory)
             RollIconButton(
                 icon = RollIcons.Settings,
                 contentDescription = stringResource(R.string.action_settings),

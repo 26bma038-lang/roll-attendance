@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -36,7 +35,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import app.roll.R
 import app.roll.core.common.TimeSource
 import app.roll.core.common.localDateTimeIn
 import app.roll.core.designsystem.component.HairlineDivider
@@ -120,11 +118,11 @@ class HistoryViewModel @Inject constructor(
 @Composable
 fun HistoryRoute(
     onOpenDay: (LocalDate) -> Unit,
-    onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    HistoryScreen(uiState, onMonthChange = viewModel::showMonth, onOpenDay = onOpenDay, onOpenSettings = onOpenSettings)
+    HistoryScreen(uiState, onMonthChange = viewModel::showMonth, onOpenDay = onOpenDay, onBack = onBack)
 }
 
 @Composable
@@ -132,7 +130,7 @@ fun HistoryScreen(
     uiState: HistoryUiState,
     onMonthChange: (YearMonth) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = RollTheme.colors
@@ -142,15 +140,10 @@ fun HistoryScreen(
     Column(
         modifier
             .fillMaxSize()
+            .background(colors.background)
             .verticalScroll(rememberScrollState()),
     ) {
-        RollTopAppBar(title = "History") {
-            RollIconButton(
-                icon = RollIcons.Settings,
-                contentDescription = stringResource(R.string.action_settings),
-                onClick = onOpenSettings,
-            )
-        }
+        RollTopAppBar(title = "History", onBack = onBack)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = Spacing.gutter, end = Spacing.xs),

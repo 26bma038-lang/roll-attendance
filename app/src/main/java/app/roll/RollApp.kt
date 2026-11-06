@@ -34,6 +34,7 @@ import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.session.AppSession
 import app.roll.data.session.AppState
 import app.roll.feature.auth.SignInRoute
+import app.roll.feature.deadlines.DeadlineReminderSync
 import app.roll.feature.onboarding.ProfileSetupRoute
 import app.roll.feature.settings.ReminderScheduler
 import app.roll.navigation.RollNavHost
@@ -51,6 +52,7 @@ class RootViewModel @Inject constructor(
     messages: UserMessages,
     preferences: UserPreferencesRepository,
     reminders: ReminderScheduler,
+    deadlineReminders: DeadlineReminderSync,
 ) : ViewModel() {
     val state: StateFlow<AppState> = session.state
     val messages: SharedFlow<String> = messages.messages
@@ -58,6 +60,8 @@ class RootViewModel @Inject constructor(
     init {
         // Re-arm the daily reminder at its exact time on every start.
         viewModelScope.launch { reminders.apply(preferences.reminder.first()) }
+        // Keep deadline notifications in step with assignments while the app is open.
+        deadlineReminders.start(viewModelScope)
     }
 }
 

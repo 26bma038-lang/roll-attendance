@@ -12,6 +12,7 @@ import app.roll.domain.model.SessionStatus
 import app.roll.domain.model.SessionType
 import app.roll.domain.model.Subject
 import app.roll.domain.model.UserProfile
+import app.roll.testing.FakeAssignmentRepository
 import app.roll.testing.FakeAuthRepository
 import app.roll.testing.FakeClassRepository
 import app.roll.testing.FakeMarkRepository
@@ -65,7 +66,7 @@ class TodayViewModelTest {
             scope = appScope.backgroundScope,
         )
         val schedule = FakeScheduleRepository(sessions, listOf(Subject("daa", "Design and Analysis of Algorithms", "DAA", "", "", 0, false)))
-        val classData = ClassData(session, schedule, marks, appScope.backgroundScope)
+        val classData = ClassData(session, schedule, marks, FakeAssignmentRepository(), appScope.backgroundScope)
         return TodayViewModel(
             session = session,
             classData = classData,

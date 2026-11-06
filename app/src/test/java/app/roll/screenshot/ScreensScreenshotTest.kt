@@ -35,6 +35,14 @@ import app.roll.feature.department.DepartmentScreen
 import app.roll.feature.department.DepartmentUiState
 import app.roll.domain.model.Department
 import app.roll.domain.model.DepartmentLink
+import app.roll.domain.deadlines.Deadlines
+import app.roll.domain.model.Assignment
+import app.roll.domain.model.AssignmentType
+import app.roll.feature.deadlines.AssignmentDetailScreen
+import app.roll.feature.deadlines.AssignmentDetailUiState
+import app.roll.feature.deadlines.DeadlinesScreen
+import app.roll.feature.deadlines.DeadlinesUiState
+import app.roll.feature.deadlines.deadlineItem
 import app.roll.feature.auth.SignInScreen
 import app.roll.feature.auth.SignInUiState
 import app.roll.feature.common.sessionItems
@@ -151,8 +159,9 @@ class ScreensScreenshotTest {
                         RollBottomBar(
                             items = listOf(
                                 RollNavItem("Today", RollIcons.Today),
+                                RollNavItem("Deadlines", RollIcons.Deadlines),
                                 RollNavItem("Subjects", RollIcons.Subjects),
-                                RollNavItem("History", RollIcons.History),
+                                RollNavItem("Department", RollIcons.Department),
                                 RollNavItem("Manage", RollIcons.Manage),
                             ),
                             selectedIndex = selected,
@@ -194,8 +203,8 @@ class ScreensScreenshotTest {
         return SubjectsUiState(loading = false, requiredPercent = 75, overall = overall, subjects = summaries, isCR = true)
     }
 
-    @Test fun subjects_light() = shot("02_subjects_light", tabs = true, selected = 1) { SubjectsScreen(subjectsState(), {}, {}, {}) }
-    @Test fun subjects_dark() = shot("02_subjects_dark", dark = true, tabs = true, selected = 1) { SubjectsScreen(subjectsState(), {}, {}, {}) }
+    @Test fun subjects_light() = shot("02_subjects_light", tabs = true, selected = 2) { SubjectsScreen(subjectsState(), {}, {}, {}) }
+    @Test fun subjects_dark() = shot("02_subjects_dark", dark = true, tabs = true, selected = 2) { SubjectsScreen(subjectsState(), {}, {}, {}) }
 
     private fun detailState(): SubjectDetailUiState {
         val mine = (pastSessions + todaySessions).filter { it.subjectId == "cn" }
@@ -230,8 +239,8 @@ class ScreensScreenshotTest {
         firstMonth = YearMonth.from(today.minusDays(42)),
     )
 
-    @Test fun history_light() = shot("04_history_light", tabs = true, selected = 2) { HistoryScreen(historyState(), {}, {}, {}) }
-    @Test fun history_dark() = shot("04_history_dark", dark = true, tabs = true, selected = 2) { HistoryScreen(historyState(), {}, {}, {}) }
+    @Test fun history_light() = shot("04_history_light") { HistoryScreen(historyState(), {}, {}, {}) }
+    @Test fun history_dark() = shot("04_history_dark", dark = true) { HistoryScreen(historyState(), {}, {}, {}) }
 
     private fun manageState() = ManageUiState(
         loading = false,
@@ -251,7 +260,7 @@ class ScreensScreenshotTest {
         className = "CSE DS — C",
     )
 
-    @Test fun manage_light() = shot("05_manage_light", tabs = true, selected = 3) { ManageScreen(manageState(), {}, {}, {}, {}, {}, {}, {}) }
+    @Test fun manage_light() = shot("05_manage_light", tabs = true, selected = 4) { ManageScreen(manageState(), {}, {}, {}, {}, {}, {}, {}) }
 
     @Test fun sessionDetail_light() = shot("06_session_detail_light") {
         SessionDetailScreen(
@@ -287,7 +296,7 @@ class ScreensScreenshotTest {
     @Test fun settings_dark() = shot("09_settings_dark", dark = true) {
         SettingsScreen(
             SettingsUiState(ThemeMode.Dark, ReminderSettings(true, 17 * 60), ClassContext("me", profile, rollClass, identity, isAdmin = true)),
-            {}, {}, {}, {}, {}, {},
+            {}, {}, {}, {}, {}, {}, {},
         )
     }
 
@@ -316,6 +325,54 @@ class ScreensScreenshotTest {
     @Test fun department_dark() = shot("14_department_dark", dark = true, tabs = true, selected = 3) { DepartmentScreen(departmentState(), {}) }
     @Test fun adminDepartment_light() = shot("15_admin_department_light") {
         AdminDepartmentScreen(Department(code = "MA", name = "Mathematics and Computing", links = listOf(DepartmentLink("Department page", "https://nith.ac.in"))), {}, {})
+    }
+
+    private val zoneIst = java.time.ZoneId.of("Asia/Kolkata")
+    private val nowInstant = now.atZone(zoneIst).toInstant()
+    private fun assignment(id: String, title: String, subject: String, type: AssignmentType, dueAt: java.time.LocalDateTime, description: String = "", link: String = "") =
+        Assignment(id, title, subject, type, description, link, dueAt.atZone(zoneIst).toInstant(), "me", "Sahil Verma", null)
+    private val assignments = listOf(
+        assignment("a1", "Problem set 4", "daa", AssignmentType.Assignment, today.minusDays(1).atTime(23, 59)),
+        assignment("a2", "Lab report: page replacement", "os", AssignmentType.LabReport, today.atTime(17, 0)),
+        assignment("a3", "Quiz 2", "dbms", AssignmentType.Quiz, today.plusDays(1).atTime(10, 0)),
+        assignment("a4", "Mid-sem", "cn", AssignmentType.MidSem, today.plusDays(5).atTime(9, 30)),
+        assignment("a5", "Project proposal", "ml", AssignmentType.Presentation, today.plusDays(16).atTime(23, 59), "Two slides: problem and dataset. Teams of three.", "classroom.google.com/c/abc"),
+        assignment("a6", "Problem set 3", "daa", AssignmentType.Assignment, today.minusDays(6).atTime(23, 59)),
+    )
+    private val done = setOf("a6")
+    private fun deadlinesState(): DeadlinesUiState {
+        val subjectMap = subjects.associateBy { it.id }
+        return DeadlinesUiState(
+            loading = false,
+            groups = Deadlines.group(assignments, done, nowInstant, zoneIst).mapValues { (_, list) -> list.map { deadlineItem(it, subjectMap, done, nowInstant, zoneIst) } },
+            subjects = subjects,
+            canPost = true,
+            today = today,
+            zone = zoneIst,
+        )
+    }
+
+    @Test fun deadlines_light() = shot("16_deadlines_light", tabs = true, selected = 1) { DeadlinesScreen(deadlinesState(), {}, {}, {}, { _, _ -> }, {}) }
+    @Test fun deadlines_dark() = shot("16_deadlines_dark", dark = true, tabs = true, selected = 1) { DeadlinesScreen(deadlinesState(), {}, {}, {}, { _, _ -> }, {}) }
+
+    private fun assignmentDetailState() = AssignmentDetailUiState(
+        loading = false,
+        item = deadlineItem(assignments[4], subjects.associateBy { it.id }, done, nowInstant, zoneIst),
+        subjects = subjects,
+        canEdit = true,
+        today = today,
+        zone = zoneIst,
+    )
+
+    @Test fun assignmentDetail_light() = shot("17_assignment_light") { AssignmentDetailScreen(assignmentDetailState(), {}, {}, {}, {}) }
+    @Test fun assignmentDetail_dark() = shot("17_assignment_dark", dark = true) { AssignmentDetailScreen(assignmentDetailState(), {}, {}, {}, {}) }
+
+    @Test fun todayDueSoon_light() = shot("18_today_due_soon_light", tabs = true) {
+        val subjectMap = subjects.associateBy { it.id }
+        TodayScreen(
+            todayState().copy(dueSoon = Deadlines.dueSoon(assignments, done, nowInstant).map { deadlineItem(it, subjectMap, done, nowInstant, zoneIst) }),
+            { _, _ -> }, {}, {}, {},
+        )
     }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }

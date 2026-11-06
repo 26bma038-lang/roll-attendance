@@ -38,6 +38,18 @@ interface UserPreferencesRepository {
 
     val reminder: Flow<ReminderSettings>
     suspend fun setReminder(settings: ReminderSettings)
+
+    /** Notifications 24 h and 2 h before each deadline. On by default. */
+    val deadlineReminders: Flow<Boolean>
+    suspend fun setDeadlineReminders(enabled: Boolean)
+
+    /** "Mark attendance" notification at the end of each class. On by default. */
+    val classEndPrompts: Flow<Boolean>
+    suspend fun setClassEndPrompts(enabled: Boolean)
+
+    /** The one-time "turn on notifications" explanation on Today was answered. */
+    val notificationPromptDone: Flow<Boolean>
+    suspend fun setNotificationPromptDone()
 }
 
 class DataStoreUserPreferencesRepository @Inject constructor(
@@ -68,10 +80,31 @@ class DataStoreUserPreferencesRepository @Inject constructor(
         }
     }
 
+    override val deadlineReminders: Flow<Boolean> = dataStore.data.map { it[Keys.DeadlineReminders] ?: true }
+
+    override suspend fun setDeadlineReminders(enabled: Boolean) {
+        dataStore.edit { it[Keys.DeadlineReminders] = enabled }
+    }
+
+    override val classEndPrompts: Flow<Boolean> = dataStore.data.map { it[Keys.ClassEndPrompts] ?: true }
+
+    override suspend fun setClassEndPrompts(enabled: Boolean) {
+        dataStore.edit { it[Keys.ClassEndPrompts] = enabled }
+    }
+
+    override val notificationPromptDone: Flow<Boolean> = dataStore.data.map { it[Keys.NotificationPromptDone] ?: false }
+
+    override suspend fun setNotificationPromptDone() {
+        dataStore.edit { it[Keys.NotificationPromptDone] = true }
+    }
+
     private object Keys {
         val ThemeMode = stringPreferencesKey("theme_mode")
         val ReminderEnabled = booleanPreferencesKey("reminder_enabled")
         val ReminderMinutes = intPreferencesKey("reminder_minutes")
+        val DeadlineReminders = booleanPreferencesKey("deadline_reminders")
+        val ClassEndPrompts = booleanPreferencesKey("class_end_prompts")
+        val NotificationPromptDone = booleanPreferencesKey("notification_prompt_done")
     }
 }
 

@@ -1,6 +1,8 @@
 package app.roll.testing
 
 import app.roll.core.common.TimeSource
+import app.roll.data.assignments.AssignmentDraft
+import app.roll.data.assignments.AssignmentRepository
 import app.roll.data.auth.AuthRepository
 import app.roll.data.auth.AuthUser
 import app.roll.data.classes.ClassRepository
@@ -12,6 +14,7 @@ import app.roll.data.profile.ProfileSnapshot
 import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.schedule.SessionsSnapshot
 import app.roll.domain.college.NithIdentity
+import app.roll.domain.model.Assignment
 import app.roll.domain.model.Mark
 import app.roll.domain.model.MarkRecord
 import app.roll.domain.model.Member
@@ -110,4 +113,17 @@ class FakeMarkRepository : MarkRepository {
         marks.value = if (mark == null) marks.value - sessionId else marks.value + (sessionId to mark)
     }
     override fun observeSessionMarks(classId: String, sessionId: String): Flow<List<MemberMark>> = flowOf(emptyList())
+}
+
+class FakeAssignmentRepository(assignments: List<Assignment> = emptyList()) : AssignmentRepository {
+    val assignments = MutableStateFlow(assignments)
+    val done = MutableStateFlow<Set<String>>(emptySet())
+    override fun observe(classId: String): Flow<List<Assignment>> = assignments
+    override fun post(classId: String, draft: AssignmentDraft, uid: String, name: String) = Unit
+    override fun update(classId: String, assignment: Assignment, draft: AssignmentDraft) = Unit
+    override fun delete(classId: String, assignment: Assignment) = Unit
+    override fun observeDone(uid: String): Flow<Set<String>> = done
+    override fun setDone(uid: String, assignmentId: String, done: Boolean) {
+        this.done.value = if (done) this.done.value + assignmentId else this.done.value - assignmentId
+    }
 }

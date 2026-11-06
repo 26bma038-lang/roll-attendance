@@ -1,6 +1,7 @@
 package app.roll.data.session
 
 import app.roll.core.common.ApplicationScope
+import app.roll.data.assignments.AssignmentRepository
 import app.roll.data.auth.AuthRepository
 import app.roll.data.auth.AuthUser
 import app.roll.data.classes.ClassRepository
@@ -12,6 +13,7 @@ import app.roll.data.schedule.ScheduleRepository
 import app.roll.data.schedule.SessionsSnapshot
 import app.roll.domain.college.NithConfig
 import app.roll.domain.college.NithIdentity
+import app.roll.domain.model.Assignment
 import app.roll.domain.model.RollClass
 import app.roll.domain.model.Subject
 import app.roll.domain.model.TimetableSlot
@@ -162,6 +164,7 @@ class ClassData @Inject constructor(
     session: AppSession,
     schedule: ScheduleRepository,
     marks: MarkRepository,
+    assignments: AssignmentRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val keys: Flow<Pair<String, String>?> = session.state
@@ -176,4 +179,7 @@ class ClassData @Inject constructor(
     val timetable: StateFlow<List<TimetableSlot>?> = perClass { classId, _ -> schedule.observeTimetable(classId) }
     val sessions: StateFlow<SessionsSnapshot?> = perClass { classId, _ -> schedule.observeSessions(classId) }
     val myMarks: StateFlow<MyMarks?> = perClass { classId, uid -> marks.observeMyMarks(uid, classId) }
+    val assignments: StateFlow<List<Assignment>?> = perClass { classId, _ -> assignments.observe(classId) }
+    /** Ids of assignments the student ticked done. Private to them. */
+    val doneIds: StateFlow<Set<String>?> = perClass { _, uid -> assignments.observeDone(uid) }
 }

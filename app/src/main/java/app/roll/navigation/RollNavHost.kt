@@ -28,6 +28,8 @@ import app.roll.feature.admin.AdminClassRoute
 import app.roll.feature.admin.AdminDepartmentRoute
 import app.roll.feature.admin.AdminDepartmentsScreen
 import app.roll.feature.admin.AdminHomeRoute
+import app.roll.feature.deadlines.AssignmentDetailRoute
+import app.roll.feature.deadlines.DeadlinesRoute
 import app.roll.feature.department.DepartmentRoute
 import app.roll.feature.history.DayRoute
 import app.roll.feature.history.HistoryRoute
@@ -41,12 +43,15 @@ import app.roll.feature.subjects.SubjectDetailRoute
 import app.roll.feature.subjects.SubjectsRoute
 import app.roll.feature.today.TodayRoute
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 
 // Type-safe destinations. Only reached once the user is signed in and in a class.
 
 @Serializable data object MainDest
 @Serializable data class SubjectDetailDest(val subjectId: String)
+@Serializable data object HistoryDest
 @Serializable data class DayDest(val date: String)
+@Serializable data class AssignmentDetailDest(val assignmentId: String)
 @Serializable data class SessionDetailDest(val sessionId: String)
 @Serializable data object TimetableDest
 @Serializable data object ManageSubjectsDest
@@ -57,10 +62,11 @@ import kotlinx.serialization.Serializable
 @Serializable data object AdminDepartmentsDest
 @Serializable data class AdminDepartmentDest(val code: String)
 
+/** Today · Deadlines · Subjects · Department, plus Manage for CRs. History lives in Subjects. */
 private enum class Tab(val label: String, val icon: Int) {
     Today("Today", RollIcons.Today),
+    Deadlines("Deadlines", RollIcons.Deadlines),
     Subjects("Subjects", RollIcons.Subjects),
-    History("History", RollIcons.History),
     Department("Department", RollIcons.Department),
     Manage("Manage", RollIcons.Manage),
 }
@@ -72,6 +78,7 @@ fun RollNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
+    val back: () -> Unit = { navController.popBackStack() }
     NavHost(
         navController = navController,
         startDestination = MainDest,
@@ -84,56 +91,34 @@ fun RollNavHost(
         composable<MainDest> {
             MainTabs(isCR = isCR, isAdmin = isAdmin, navController = navController)
         }
-        composable<SubjectDetailDest> {
-            Screen { SubjectDetailRoute(onBack = navController::popBackStack) }
+        composable<SubjectDetailDest> { Screen { SubjectDetailRoute(onBack = back) } }
+        composable<HistoryDest> {
+            Screen { HistoryRoute(onOpenDay = { navController.navigate(DayDest(it.toString())) }, onBack = back) }
         }
-        composable<DayDest> {
-            Screen { DayRoute(onBack = navController::popBackStack) }
-        }
-        composable<SessionDetailDest> {
-            Screen { SessionDetailRoute(onBack = navController::popBackStack) }
-        }
-        composable<TimetableDest> {
-            Screen { TimetableRoute(onBack = navController::popBackStack) }
-        }
-        composable<ManageSubjectsDest> {
-            Screen { ManageSubjectsRoute(onBack = navController::popBackStack) }
-        }
-        composable<ClassSettingsDest> {
-            Screen { ClassSettingsRoute(onBack = navController::popBackStack) }
-        }
+        composable<DayDest> { Screen { DayRoute(onBack = back) } }
+        composable<AssignmentDetailDest> { Screen { AssignmentDetailRoute(onBack = back) } }
+        composable<SessionDetailDest> { Screen { SessionDetailRoute(onBack = back) } }
+        composable<TimetableDest> { Screen { TimetableRoute(onBack = back) } }
+        composable<ManageSubjectsDest> { Screen { ManageSubjectsRoute(onBack = back) } }
+        composable<ClassSettingsDest> { Screen { ClassSettingsRoute(onBack = back) } }
         composable<SettingsDest> {
-            Screen {
-                SettingsRoute(
-                    onBack = navController::popBackStack,
-                    onOpenAdmin = { navController.navigate(AdminDest) },
-                )
-            }
+            Screen { SettingsRoute(onBack = back, onOpenAdmin = { navController.navigate(AdminDest) }) }
         }
         composable<AdminDest> {
             Screen {
                 AdminHomeRoute(
-                    onBack = navController::popBackStack,
+                    onBack = back,
                     onOpenClass = { navController.navigate(AdminClassDest(it)) },
                     onOpenDepartments = { navController.navigate(AdminDepartmentsDest) },
                     onOpenCollegeNotices = {},
                 )
             }
         }
-        composable<AdminClassDest> {
-            Screen { AdminClassRoute(onBack = navController::popBackStack) }
-        }
+        composable<AdminClassDest> { Screen { AdminClassRoute(onBack = back) } }
         composable<AdminDepartmentsDest> {
-            Screen {
-                AdminDepartmentsScreen(
-                    onBack = navController::popBackStack,
-                    onOpen = { navController.navigate(AdminDepartmentDest(it)) },
-                )
-            }
+            Screen { AdminDepartmentsScreen(onBack = back, onOpen = { navController.navigate(AdminDepartmentDest(it)) }) }
         }
-        composable<AdminDepartmentDest> {
-            Screen { AdminDepartmentRoute(onBack = navController::popBackStack) }
-        }
+        composable<AdminDepartmentDest> { Screen { AdminDepartmentRoute(onBack = back) } }
     }
 }
 
@@ -159,7 +144,8 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
     var selected by rememberSaveable { mutableIntStateOf(0) }
     if (selected >= tabs.size) selected = 0
     val openSettings = { navController.navigate(SettingsDest) }
-    val openDay = { date: java.time.LocalDate -> navController.navigate(DayDest(date.toString())) }
+    val openDay = { date: LocalDate -> navController.navigate(DayDest(date.toString())) }
+    val openAssignment = { id: String -> navController.navigate(AssignmentDetailDest(id)) }
 
     Scaffold(
         containerColor = RollTheme.colors.background,
@@ -183,13 +169,15 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
                     onOpenSettings = openSettings,
                     onOpenDay = openDay,
                     onOpenAdmin = if (isAdmin) ({ navController.navigate(AdminDest) }) else null,
+                    onOpenAssignment = openAssignment,
                 )
+                Tab.Deadlines -> DeadlinesRoute(onOpenAssignment = openAssignment, onOpenSettings = openSettings)
                 Tab.Subjects -> SubjectsRoute(
                     onOpenSubject = { navController.navigate(SubjectDetailDest(it)) },
                     onOpenSettings = openSettings,
                     onManageSubjects = { navController.navigate(ManageSubjectsDest) },
+                    onOpenHistory = { navController.navigate(HistoryDest) },
                 )
-                Tab.History -> HistoryRoute(onOpenDay = openDay, onOpenSettings = openSettings)
                 Tab.Department -> DepartmentRoute(onOpenSettings = openSettings)
                 Tab.Manage -> ManageRoute(
                     onOpenSession = { navController.navigate(SessionDetailDest(it)) },

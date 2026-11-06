@@ -84,4 +84,16 @@ private class FakeUserPreferencesRepository : UserPreferencesRepository {
     override suspend fun setReminder(settings: ReminderSettings) {
         reminder.value = settings
     }
+    override val deadlineReminders = MutableStateFlow(true)
+    override suspend fun setDeadlineReminders(enabled: Boolean) {
+        deadlineReminders.value = enabled
+    }
+    override val classEndPrompts = MutableStateFlow(true)
+    override suspend fun setClassEndPrompts(enabled: Boolean) {
+        classEndPrompts.value = enabled
+    }
+    override val notificationPromptDone = MutableStateFlow(false)
+    override suspend fun setNotificationPromptDone() {
+        notificationPromptDone.value = true
+    }
 }

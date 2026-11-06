@@ -69,6 +69,7 @@ data class SettingsUiState(
     val reminder: ReminderSettings = ReminderSettings(),
     val context: ClassContext? = null,
     val busy: Boolean = false,
+    val deadlineReminders: Boolean = true,
 )
 
 @HiltViewModel
@@ -85,12 +86,22 @@ class SettingsViewModel @Inject constructor(
     private val busy = MutableStateFlow(false)
     private val context: StateFlow<ClassContext?> = session.context.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val uiState: StateFlow<SettingsUiState> = combine(preferences.themeMode, preferences.reminder, context, busy) { theme, reminder, ctx, isBusy ->
-        SettingsUiState(theme, reminder, ctx, isBusy)
+    val uiState: StateFlow<SettingsUiState> = combine(
+        preferences.themeMode,
+        preferences.reminder,
+        context,
+        busy,
+        preferences.deadlineReminders,
+    ) { theme, reminder, ctx, isBusy, deadlines ->
+        SettingsUiState(theme, reminder, ctx, isBusy, deadlines)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch { preferences.setThemeMode(mode) }
+    }
+
+    fun setDeadlineReminders(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDeadlineReminders(enabled) }
     }
 
     fun setReminder(settings: ReminderSettings) {
@@ -150,6 +161,7 @@ fun SettingsRoute(
         onBack = onBack,
         onTheme = viewModel::setTheme,
         onReminder = viewModel::setReminder,
+        onDeadlineReminders = viewModel::setDeadlineReminders,
         onSignOut = viewModel::signOut,
         onDelete = { viewModel.deleteAccount(context) },
         onOpenAdmin = onOpenAdmin,
@@ -162,6 +174,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onReminder: (ReminderSettings) -> Unit,
+    onDeadlineReminders: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     onDelete: () -> Unit,
     onOpenAdmin: () -> Unit,
@@ -174,6 +187,7 @@ fun SettingsScreen(
         if (granted) onReminder(reminder.copy(enabled = true))
     }
     val isCR = uiState.context?.isCR == true
+    val deadlinePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     Column(
         modifier
@@ -208,6 +222,21 @@ fun SettingsScreen(
                         },
                     )
                 }
+            }
+
+            SectionHeader("Deadlines")
+            ListGroup {
+                ToggleRow(
+                    title = "Deadline reminders",
+                    subtitle = "24 hours and 2 hours before anything you haven't ticked done",
+                    checked = uiState.deadlineReminders,
+                    onToggle = { enable ->
+                        if (enable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            deadlinePermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        onDeadlineReminders(enable)
+                    },
+                )
             }
 
             SectionHeader("Daily reminder")
@@ -324,4 +353,35 @@ fun SettingsScreen(
             onDismiss = { dialog = SettingsDialog.None },
         )
     }
+}
+
+/** A settings row with a switch; the whole row toggles. */
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    val colors = RollTheme.colors
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        showChevron = false,
+        modifier = Modifier.selectable(selected = checked, role = Role.Switch, onClick = { onToggle(!checked) }),
+        trailing = {
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = colors.accent,
+                    checkedThumbColor = colors.onAccent,
+                    uncheckedTrackColor = colors.hairline,
+                    uncheckedThumbColor = colors.inkSecondary,
+                    uncheckedBorderColor = colors.outline,
+                ),
+                modifier = Modifier.padding(end = Spacing.sm),
+            )
+        },
+    )
 }

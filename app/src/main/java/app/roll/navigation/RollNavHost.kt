@@ -24,6 +24,8 @@ import app.roll.core.designsystem.component.RollSnackbarHost
 import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.theme.Motion
 import app.roll.core.designsystem.theme.RollTheme
+import app.roll.feature.admin.AdminClassRoute
+import app.roll.feature.admin.AdminHomeRoute
 import app.roll.feature.history.DayRoute
 import app.roll.feature.history.HistoryRoute
 import app.roll.feature.manage.ClassSettingsRoute
@@ -47,6 +49,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object ManageSubjectsDest
 @Serializable data object ClassSettingsDest
 @Serializable data object SettingsDest
+@Serializable data object AdminDest
+@Serializable data class AdminClassDest(val classId: String)
 
 private enum class Tab(val label: String, val icon: Int) {
     Today("Today", RollIcons.Today),
@@ -72,7 +76,7 @@ fun RollNavHost(
         popExitTransition = { fadeOut(Motion.short()) },
     ) {
         composable<MainDest> {
-            MainTabs(isCR = isCR, navController = navController)
+            MainTabs(isCR = isCR, isAdmin = isAdmin, navController = navController)
         }
         composable<SubjectDetailDest> {
             Screen { SubjectDetailRoute(onBack = navController::popBackStack) }
@@ -96,9 +100,22 @@ fun RollNavHost(
             Screen {
                 SettingsRoute(
                     onBack = navController::popBackStack,
-                    onOpenAdmin = {},
+                    onOpenAdmin = { navController.navigate(AdminDest) },
                 )
             }
+        }
+        composable<AdminDest> {
+            Screen {
+                AdminHomeRoute(
+                    onBack = navController::popBackStack,
+                    onOpenClass = { navController.navigate(AdminClassDest(it)) },
+                    onOpenDepartments = {},
+                    onOpenCollegeNotices = {},
+                )
+            }
+        }
+        composable<AdminClassDest> {
+            Screen { AdminClassRoute(onBack = navController::popBackStack) }
         }
     }
 }
@@ -120,7 +137,7 @@ private fun Screen(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun MainTabs(isCR: Boolean, navController: NavHostController) {
+private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostController) {
     val tabs = if (isCR) Tab.entries else Tab.entries - Tab.Manage
     var selected by rememberSaveable { mutableIntStateOf(0) }
     if (selected >= tabs.size) selected = 0
@@ -145,7 +162,11 @@ private fun MainTabs(isCR: Boolean, navController: NavHostController) {
                 .padding(padding),
         ) {
             when (tabs[selected]) {
-                Tab.Today -> TodayRoute(onOpenSettings = openSettings, onOpenDay = openDay)
+                Tab.Today -> TodayRoute(
+                    onOpenSettings = openSettings,
+                    onOpenDay = openDay,
+                    onOpenAdmin = if (isAdmin) ({ navController.navigate(AdminDest) }) else null,
+                )
                 Tab.Subjects -> SubjectsRoute(
                     onOpenSubject = { navController.navigate(SubjectDetailDest(it)) },
                     onOpenSettings = openSettings,

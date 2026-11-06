@@ -26,6 +26,10 @@ import app.roll.domain.model.Subject
 import app.roll.domain.model.ThemeMode
 import app.roll.domain.model.TimetableSlot
 import app.roll.domain.model.UserProfile
+import app.roll.feature.admin.AdminClassScreen
+import app.roll.feature.admin.AdminClassUiState
+import app.roll.feature.admin.AdminHomeScreen
+import app.roll.feature.admin.AdminHomeUiState
 import app.roll.feature.auth.SignInScreen
 import app.roll.feature.auth.SignInUiState
 import app.roll.feature.common.sessionItems
@@ -281,6 +285,17 @@ class ScreensScreenshotTest {
             {}, {}, {}, {}, {}, {},
         )
     }
+
+    private val otherClasses = listOf(
+        rollClass,
+        RollClass("nith-26-cs", "CS 2026", "Semester 1 · Odd 2026-27", 2026, "CS", emptyList(), emptyList(), 75, "Asia/Kolkata", 71),
+        RollClass("nith-25-ec", "EC 2025", "Semester 3 · Odd 2026-27", 2025, "EC", listOf("x", "y"), listOf("Ritika Sharma", "Arjun Nair"), 75, "Asia/Kolkata", 64),
+    )
+
+    @Test fun adminHome_light() = shot("12_admin_home_light") { AdminHomeScreen(AdminHomeUiState(false, otherClasses), {}, {}, {}, {}) }
+    @Test fun adminHome_dark() = shot("12_admin_home_dark", dark = true) { AdminHomeScreen(AdminHomeUiState(false, otherClasses), {}, {}, {}, {}) }
+    @Test fun adminClass_light() = shot("13_admin_class_light") { AdminClassScreen(AdminClassUiState(false, rollClass, members), {}, {}, {}) }
+    @Test fun adminClass_dark() = shot("13_admin_class_dark", dark = true) { AdminClassScreen(AdminClassUiState(false, rollClass, members), {}, {}, {}) }
 
     @Test fun signIn_light() = shot("10_sign_in_light") { SignInScreen(SignInUiState(), {}) }
 

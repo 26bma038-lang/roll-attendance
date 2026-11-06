@@ -159,6 +159,7 @@ class TodayViewModel @Inject constructor(
 fun TodayRoute(
     onOpenSettings: () -> Unit,
     onOpenDay: (LocalDate) -> Unit,
+    onOpenAdmin: (() -> Unit)?,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -169,6 +170,7 @@ fun TodayRoute(
         onRefresh = viewModel::onRefresh,
         onOpenSettings = onOpenSettings,
         onOpenDay = onOpenDay,
+        onOpenAdmin = onOpenAdmin,
     )
 }
 
@@ -181,10 +183,14 @@ fun TodayScreen(
     onOpenSettings: () -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenAdmin: (() -> Unit)? = null,
 ) {
     val colors = RollTheme.colors
     Column(modifier.fillMaxSize()) {
         RollTopAppBar(title = uiState.date?.let(::formatDayHeader) ?: "Today") {
+            if (onOpenAdmin != null) {
+                RollIconButton(icon = RollIcons.Admin, contentDescription = "Admin panel", onClick = onOpenAdmin)
+            }
             RollIconButton(
                 icon = RollIcons.Settings,
                 contentDescription = stringResource(R.string.action_settings),

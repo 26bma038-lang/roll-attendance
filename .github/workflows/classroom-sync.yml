@@ -1,0 +1,64 @@
+# Copies the study-material index from the senior's Google Classroom into Firestore once a day.
+# Writes only when the index changed. Fails (and GitHub emails the repo owner) when the Google
+# sign-in stops working, so a broken refresh token never goes unnoticed.
+#
+# Secrets (Settings → Secrets and variables → Actions), see tools/classroom-sync/README.md:
+#   GOOGLE_OAUTH_CLIENT       the Desktop app OAuth client JSON
+#   GOOGLE_REFRESH_TOKEN      refresh_token from tools/classroom-sync/.secrets/token.json
+#   FIREBASE_SERVICE_ACCOUNT  the Firebase service-account key JSON
+
+name: Classroom sync
+
+on:
+  schedule:
+    - cron: "30 0 * * *" # 00:30 UTC = 06:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: classroom-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/classroom-sync
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/classroom-sync/package-lock.json
+
+      - name: Check the secrets are set
+        env:
+          GOOGLE_OAUTH_CLIENT: ${{ secrets.GOOGLE_OAUTH_CLIENT }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          missing=""
+          [ -n "$GOOGLE_OAUTH_CLIENT" ] || missing="$missing GOOGLE_OAUTH_CLIENT"
+          [ -n "$GOOGLE_REFRESH_TOKEN" ] || missing="$missing GOOGLE_REFRESH_TOKEN"
+          [ -n "$FIREBASE_SERVICE_ACCOUNT" ] || missing="$missing FIREBASE_SERVICE_ACCOUNT"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing. See tools/classroom-sync/README.md, 'Daily sync on GitHub Actions'."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Sync
+        env:
+          GOOGLE_OAUTH_CLIENT: ${{ secrets.GOOGLE_OAUTH_CLIENT }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: npm run sync

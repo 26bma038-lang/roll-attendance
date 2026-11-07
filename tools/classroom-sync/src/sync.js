@@ -106,6 +106,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`\n${error instanceof SyncError ? error.message : error.stack ?? error}`);
+  const message = error instanceof SyncError ? error.message : error.stack ?? String(error);
+  // On GitHub Actions the first line also becomes an error annotation on the run page.
+  if (process.env.GITHUB_ACTIONS) console.error(`::error::${message.split('\n')[0]}`);
+  console.error(`\n${message}`);
   process.exitCode = 1; // not process.exit(): let open handles close first (libuv asserts on Windows otherwise)
 });

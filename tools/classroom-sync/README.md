@@ -154,6 +154,51 @@ now; parts kick in automatically if a course grows past about 2,500 files.
 Students can read these documents; nobody can write them from the app, not even the admin
 (`firestore.rules`). The sync script's Admin SDK bypasses the rules.
 
+## Daily sync on GitHub Actions
+
+[`.github/workflows/classroom-sync.yml`](../../.github/workflows/classroom-sync.yml) runs
+`npm run sync` every day at 06:00 IST, and whenever you press **Run workflow**. It writes only
+when something changed in the Classroom. If the Google sign-in stops working (token revoked,
+password changed, app moved back to "Testing") the run fails and GitHub emails you; run
+`npm run login` again and update the `GOOGLE_REFRESH_TOKEN` secret.
+
+The repo is public, but secrets are not: GitHub keeps them encrypted, hides them in logs, and
+never gives them to pull requests from forks.
+
+### Add the 3 secrets (once)
+
+You need the three files from the setup above, all in `tools/classroom-sync/.secrets/`:
+`oauth-client.json`, `token.json` (after `npm run login`) and `service-account.json`.
+
+**Option A, in the browser**
+
+1. Open the repo on github.com → **Settings** → **Secrets and variables** → **Actions**.
+2. Press **New repository secret** three times:
+
+   | Name | Value |
+   |---|---|
+   | `GOOGLE_OAUTH_CLIENT` | the whole contents of `oauth-client.json` (open it in Notepad, select all, copy) |
+   | `GOOGLE_REFRESH_TOKEN` | only the text inside the quotes after `"refresh_token":` in `token.json`, starting `1//` |
+   | `FIREBASE_SERVICE_ACCOUNT` | the whole contents of `service-account.json` |
+
+**Option B, with the GitHub CLI** (`gh auth login` once), from `tools/classroom-sync`. Nothing is
+printed on screen:
+
+```
+gh secret set GOOGLE_OAUTH_CLIENT < .secrets/oauth-client.json
+node -e "process.stdout.write(require('./.secrets/token.json').refresh_token)" | gh secret set GOOGLE_REFRESH_TOKEN
+gh secret set FIREBASE_SERVICE_ACCOUNT < .secrets/service-account.json
+```
+
+### Check it works
+
+GitHub → **Actions** → **Classroom sync** → **Run workflow**. A green tick and
+`unchanged: materialSources/first-year` (or `written: …`) in the "Sync" step means it's working.
+A red cross shows what's wrong at the top of the run; a missing secret is named there.
+
+GitHub pauses scheduled workflows in a public repo after 60 days without a commit, and emails you
+first. Press **Enable workflow** on the Actions page (or push any commit) to start it again.
+
 ## How files are sorted
 
 | Classroom topic | Roll section |

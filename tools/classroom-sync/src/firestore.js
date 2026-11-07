@@ -48,6 +48,9 @@ function loadServiceAccount() {
 export function openFirestore() {
   if (process.env.FIRESTORE_EMULATOR_HOST) {
     const projectId = process.env.FIREBASE_PROJECT ?? 'demo-roll';
+    // No real credential on the emulator: stop google-auth-library probing for a Google Cloud
+    // metadata server, which only times out and prints a MetadataLookupWarning.
+    process.env.METADATA_SERVER_DETECTION ??= 'none';
     return { db: getFirestore(initializeApp({ projectId })), projectId };
   }
   const key = loadServiceAccount();

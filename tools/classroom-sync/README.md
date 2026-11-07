@@ -4,7 +4,8 @@ Copies the list of study material (notes, books, practical files, assignments, s
 year papers) from a senior's Google Classroom into Roll. The PDFs stay in Google Drive. Roll keeps
 only an index: titles, subjects and links.
 
-Node 20 or newer. No dependencies to install for the dry run.
+Node 22 or newer. The dry run needs no packages; the real sync needs `npm install` once (Firebase
+Admin SDK).
 
 The courses to copy are listed in [`sources.json`](sources.json). To add one (say, second year),
 add an entry with its course id, credit line, Classroom link, years and branches. No code changes.
@@ -87,6 +88,63 @@ and print a warning; no file is ever dropped.
 `--save-raw` keeps the Classroom API responses so the parser can be re-run offline with
 `--fixture raw.json`. Don't commit that file: it has the course's Drive links.
 
+## Sync to Firestore
+
+### Firebase key (once)
+
+1. Open the [Firebase console](https://console.firebase.google.com/) → project **roll-attendance**
+   → gear icon → **Project settings** → **Service accounts**.
+2. Press **Generate new private key** → **Generate key**. A JSON file downloads.
+3. Save it as `tools/classroom-sync/.secrets/service-account.json`.
+
+This key can read and write the whole database. Keep it in `.secrets/` (git-ignored), never commit
+it, never send it to anyone. If it leaks, delete it on the same page and generate a new one.
+
+### Run it
+
+```
+npm install          # once
+npm run sync
+```
+
+Every source needs a real credit line in `sources.json`: the sync refuses to write while one
+still holds a placeholder such as `<NAME>` or `___`.
+
+What it does, per source:
+
+- Reads `materialSources/{id}` (1 read). If the index is the same as last time, nothing is written.
+- Otherwise writes the whole index in one go, so files removed from Classroom disappear from Roll.
+- If Classroom suddenly returns no files while Roll has some, it stops instead of wiping the index.
+  `--force` overrides that, and also rewrites an unchanged index.
+
+Flags: `--source <id>`, `--out index.json` (also keep a copy), `--fixture raw.json`.
+
+To try it without touching the real database, run it against the emulator from `rules-tests/`:
+`npx firebase emulators:exec --only firestore --project demo-roll --config ../firebase.json "node ../tools/classroom-sync/src/sync.js --fixture <raw.json>"`.
+With `FIRESTORE_EMULATOR_HOST` set (emulators:exec does that) no key is needed.
+
+### What Roll stores
+
+```
+materialSources/{sourceId}
+  title, credit, classroomUrl, years: [1], branches: ["EC", "MA"]
+  syncedAt        when the index last changed
+  contentHash     used to skip writes when nothing changed
+  itemCount       number of files
+  partCount       0 = items are in this document; n = items are in parts/0 … parts/n-1
+  items: [ { id, section, sectionLabel, subjectCode?, subjectName, itemTitle, title,
+             exam?, academicYear?, url, driveFileId?, mimeType?, updatedAt } ]
+
+materialSources/{sourceId}/parts/{n}    { n, items: [...] }   only when the index passes ~800 KB
+```
+
+`itemTitle` is the Classroom post's title (for Sunil Sir's notes, the chapter). `updatedAt` is the
+post's update time as an ISO string. 574 files take roughly 160–250 KB, so one document is plenty for
+now; parts kick in automatically if a course grows past about 2,500 files.
+
+Students can read these documents; nobody can write them from the app, not even the admin
+(`firestore.rules`). The sync script's Admin SDK bypasses the rules.
+
 ## How files are sorted
 
 | Classroom topic | Roll section |
@@ -127,8 +185,10 @@ npm test
 |---|---|
 | `sources.json` | courses to copy and who sees them |
 | `src/login.js` | `npm run login`: browser sign-in, saves the refresh token |
-| `src/sync.js` | `npm run dry-run` |
+| `src/sync.js` | `npm run dry-run`, `npm run sync` |
+| `src/publish.js` | what to write: change check, splitting into parts |
+| `src/firestore.js` | Firestore writes (Admin SDK) |
 | `src/classroom.js` | Classroom API calls, paging, error messages |
 | `src/index.js` | raw API data → Roll index |
 | `src/parse.js` | topic, subject, exam, year and title rules |
-| `.secrets/` | OAuth client and token. Git-ignored. |
+| `.secrets/` | OAuth client, token, Firebase key. Git-ignored. |

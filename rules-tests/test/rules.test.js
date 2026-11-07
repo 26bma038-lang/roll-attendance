@@ -135,6 +135,17 @@ function departmentDoc(code, overrides = {}) {
   };
 }
 
+function materialSourceDoc(overrides = {}) {
+  return {
+    title: 'First year', credit: 'Material shared by a senior',
+    classroomUrl: 'https://classroom.google.com/w/NjI2OTQwMTM5NDAy/t/all',
+    years: [1], branches: ['EC', 'MA'], contentHash: 'h', itemCount: 1, partCount: 0,
+    items: [{ id: 'i1', section: 'pyq', sectionLabel: 'Previous year papers', subjectCode: 'MA-111',
+      subjectName: 'Eng. Mathematics-1', title: 'END SEM 2024-25', url: 'https://drive.google.com/file/d/p/view' }],
+    ...overrides,
+  };
+}
+
 /** MA 2026 with one CR and two students; CS 2026 with one student. */
 async function seed() {
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -160,6 +171,8 @@ async function seed() {
     await setDoc(doc(f, `classes/${CLASS}/notices/n1`), { ...noticeDoc(), createdAt: now, updatedAt: now });
     await setDoc(doc(f, 'notices/c1'), { ...noticeDoc({ createdByName: 'Admin' }), createdAt: now, updatedAt: now });
     await setDoc(doc(f, 'departments/MA'), { ...departmentDoc('MA'), updatedAt: now });
+    await setDoc(doc(f, 'materialSources/fy-ec-ma'), materialSourceDoc({ syncedAt: now }));
+    await setDoc(doc(f, 'materialSources/fy-ec-ma/parts/0'), { n: 0, items: [] });
     await setDoc(doc(f, 'users/student/assignmentStatus/a1'), { done: true, doneAt: now });
   });
 }
@@ -461,5 +474,31 @@ describe('departments', () => {
 
   test('only supported branches have department docs', async () => {
     await assertFails(setDoc(doc(db('admin'), 'departments/EE'), departmentDoc('EE', { name: 'Electrical' })));
+  });
+});
+
+describe('study material', () => {
+  test('any valid student reads the index and its parts', async () => {
+    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/fy-ec-ma')));
+    await assertSucceeds(getDoc(doc(db('cs'), 'materialSources/fy-ec-ma')));
+    await assertSucceeds(getDocs(collection(db('student'), 'materialSources')));
+    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/fy-ec-ma/parts/0')));
+  });
+
+  test('signed-out and non-college users cannot read', async () => {
+    await assertFails(getDoc(doc(anon(), 'materialSources/fy-ec-ma')));
+    await assertFails(getDoc(doc(anon(), 'materialSources/fy-ec-ma/parts/0')));
+    await assertFails(getDoc(doc(db('gmail'), 'materialSources/fy-ec-ma')));
+  });
+
+  test('no client writes, not even the admin; only the sync script (Admin SDK) writes', async () => {
+    for (const uid of ['student', 'cr', 'admin']) {
+      const f = db(uid);
+      await assertFails(setDoc(doc(f, 'materialSources/fy-ec-ma'), materialSourceDoc({ credit: 'x' })));
+      await assertFails(updateDoc(doc(f, 'materialSources/fy-ec-ma'), { items: [] }));
+      await assertFails(deleteDoc(doc(f, 'materialSources/fy-ec-ma')));
+      await assertFails(setDoc(doc(f, 'materialSources/new'), materialSourceDoc()));
+      await assertFails(setDoc(doc(f, 'materialSources/fy-ec-ma/parts/1'), { n: 1, items: [] }));
+    }
   });
 });

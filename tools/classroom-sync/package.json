@@ -4,12 +4,15 @@
   "type": "module",
   "description": "Copies the study-material index (titles, subjects, Drive links) from a Google Classroom course into Roll.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "login": "node src/login.js",
     "sync": "node src/sync.js",
     "dry-run": "node src/sync.js --dry-run",
-    "test": "node --test test/parse.test.js test/index.test.js"
+    "test": "node --test test/parse.test.js test/index.test.js test/publish.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
   }
 }

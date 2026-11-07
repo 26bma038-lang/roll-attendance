@@ -27,3 +27,8 @@ export function validateSources(sources) {
   }
   return sources;
 }
+
+/** True while a credit line still holds a placeholder such as "<SENIOR NAME>" or "___". */
+export function hasPlaceholder(credit) {
+  return /<[^>]*>|_{3,}/.test(String(credit ?? ''));
+}

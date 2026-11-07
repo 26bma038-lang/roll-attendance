@@ -1,8 +1,10 @@
-// `npm run dry-run`: reads every course in sources.json and prints the material index.
+// `npm run sync`: reads every course in sources.json and writes its material index to Firestore.
+// `npm run dry-run`: the same, but prints the index instead of writing it.
 //
-//   --dry-run          required for now (Firestore writes arrive in Phase 2)
+//   --dry-run          print the index, write nothing
+//   --force            write even if nothing changed, or if Classroom returned no files
 //   --source <id>      only this source
-//   --out <file>       write the index JSON to a file instead of stdout
+//   --out <file>       also write the index JSON to a file (a dry run prints it to stdout otherwise)
 //   --save-raw <file>  also save the raw Classroom API responses (for debugging the parser)
 //   --fixture <file>   read raw responses from a file saved with --save-raw instead of the API
 
@@ -11,14 +13,14 @@ import { parseArgs } from 'node:util';
 import { SyncError, accessToken } from './auth.js';
 import { fetchCourse } from './classroom.js';
 import { buildIndex, summarize } from './index.js';
-import { loadSources } from './sources.js';
+import { hasPlaceholder, loadSources } from './sources.js';
 
 function printSummary(source, course, items, warnings) {
   const log = (line = '') => console.error(line);
   log();
   log(`${source.id}: ${course?.name ?? source.title}  (${items.length} files)`);
   log(`  credit: ${source.credit}`);
-  if (/<[^>]+>/.test(source.credit)) log('  warning: the credit line still has a placeholder; fill in the senior\'s name in sources.json');
+  if (hasPlaceholder(source.credit)) log('  warning: the credit line still has a placeholder; fill in the senior\'s name in sources.json');
   for (const [key, section] of summarize(items)) {
     log();
     const heading = key.startsWith('other: ') ? `other "${section.label}"` : `${key} "${section.label}"`;
@@ -35,20 +37,31 @@ async function main() {
   const { values } = parseArgs({
     options: {
       'dry-run': { type: 'boolean', default: false },
+      force: { type: 'boolean', default: false },
       source: { type: 'string' },
       out: { type: 'string' },
       'save-raw': { type: 'string' },
       fixture: { type: 'string' },
     },
   });
-  if (!values['dry-run']) {
-    throw new SyncError('Only --dry-run is available so far: writing to Firestore comes in Phase 2.');
-  }
+  const dryRun = values['dry-run'];
 
   let sources = loadSources();
   if (values.source) {
     sources = sources.filter((s) => s.id === values.source);
     if (!sources.length) throw new SyncError(`No source "${values.source}" in sources.json.`);
+  }
+
+  // Check everything needed for writing before spending API calls.
+  let firestore = null;
+  if (!dryRun) {
+    const unnamed = sources.filter((s) => hasPlaceholder(s.credit)).map((s) => s.id);
+    if (unnamed.length) {
+      throw new SyncError(`Fill in the credit line in sources.json before syncing (${unnamed.join(', ')}): Roll must credit the senior.`);
+    }
+    const { openFirestore, publishSource } = await import('./firestore.js'); // only the real sync needs firebase-admin
+    firestore = { ...openFirestore(), publishSource };
+    console.error(`Writing to Firestore project ${firestore.projectId}${process.env.FIRESTORE_EMULATOR_HOST ? ' (emulator)' : ''}.`);
   }
 
   const fixture = values.fixture ? JSON.parse(readFileSync(values.fixture, 'utf8')) : null;
@@ -64,6 +77,14 @@ async function main() {
     printSummary(source, raw.course, items, warnings);
     const { id, title, credit, classroomUrl, years, branches } = source;
     output.push({ id, title, credit, classroomUrl, years, branches, courseName: raw.course?.name, items });
+
+    if (firestore) {
+      const result = await firestore.publishSource(firestore.db, source, items, { force: values.force });
+      const parts = result.partCount ? ` in ${result.partCount} parts` : '';
+      console.error(result.changed
+        ? `\n  written: materialSources/${source.id}, ${result.itemCount} files${parts}`
+        : `\n  unchanged: materialSources/${source.id}, nothing written`);
+    }
   }
 
   if (values['save-raw']) writeFileSync(values['save-raw'], JSON.stringify(raws, null, 2) + '\n');
@@ -71,7 +92,7 @@ async function main() {
   if (values.out) {
     writeFileSync(values.out, json);
     console.error(`\nIndex written to ${values.out}`);
-  } else {
+  } else if (dryRun) {
     process.stdout.write(json);
   }
 }

@@ -185,6 +185,18 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    // ---------- study material (written only by tools/classroom-sync with the Admin SDK) ----------
+
+    match /materialSources/{sourceId} {
+      allow read: if validUser();
+      allow write: if false;
+
+      match /parts/{n} {
+        allow read: if validUser();
+        allow write: if false;
+      }
+    }
+
     // ---------- notices ----------
 
     function validNotice(data) {

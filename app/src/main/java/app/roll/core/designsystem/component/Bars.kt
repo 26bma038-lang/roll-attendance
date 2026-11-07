@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -37,8 +39,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.roll.R
 import app.roll.core.designsystem.icon.RollIcons
@@ -95,6 +99,8 @@ fun RollTopAppBar(
 data class RollNavItem(
     val label: String,
     @param:DrawableRes val icon: Int,
+    /** A quiet dot on the icon: something new behind this tab. */
+    val dot: Boolean = false,
 )
 
 /**
@@ -155,7 +161,8 @@ private fun RowScope.NavItem(
         modifier = Modifier
             .weight(1f)
             .heightIn(min = Sizes.bottomBarHeight)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .semantics { if (item.dot) stateDescription = "New" },
     ) {
         Box(
             Modifier
@@ -163,12 +170,23 @@ private fun RowScope.NavItem(
                 .background(indicator),
         )
         Spacer(Modifier.height(Spacing.sm))
-        Icon(
-            painter = painterResource(item.icon),
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(Sizes.icon),
-        )
+        Box {
+            Icon(
+                painter = painterResource(item.icon),
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(Sizes.icon),
+            )
+            if (item.dot) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 3.dp, y = (-1).dp)
+                        .size(7.dp)
+                        .background(colors.accent, CircleShape),
+                )
+            }
+        }
         // Six tabs (CRs) on a narrow phone: long labels such as "Department" step down in size
         // instead of being clipped.
         val style = navLabelStyle()

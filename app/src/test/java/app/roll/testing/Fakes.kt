@@ -9,6 +9,8 @@ import app.roll.data.classes.ClassRepository
 import app.roll.data.classes.ClassResult
 import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
+import app.roll.data.feed.CollegeFeedRepository
+import app.roll.data.feed.FeedLoad
 import app.roll.data.materials.MaterialRepository
 import app.roll.data.materials.MaterialsLoad
 import app.roll.domain.materials.MaterialSource
@@ -170,6 +172,10 @@ class FakePreferences : UserPreferencesRepository {
     override suspend fun setNotificationPromptDone() {
         notificationPromptDone.value = true
     }
+    override val nithNoticesSeenAt = MutableStateFlow<Instant?>(null)
+    override suspend fun setNithNoticesSeenAt(at: Instant) {
+        nithNoticesSeenAt.value = at
+    }
 }
 
 class FakeMaterialRepository(load: MaterialsLoad) : MaterialRepository {
@@ -187,4 +193,9 @@ class FakeMaterialRepository(load: MaterialsLoad) : MaterialRepository {
             }
         }
     }
+}
+
+class FakeCollegeFeedRepository(load: FeedLoad = FeedLoad.Loaded(emptyList())) : CollegeFeedRepository {
+    val load = MutableStateFlow(load)
+    override fun observe(): Flow<FeedLoad> = load
 }

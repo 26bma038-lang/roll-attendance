@@ -28,3 +28,8 @@ tools/classroom-sync/index*.json
 client_secret*.json
 *service-account*.json
 *-firebase-adminsdk-*.json
+tools/nith-notices/.secrets/
+tools/nith-notices/out/
+tools/timetable-import/.secrets/
+tools/timetable-import/timetable-draft*.json
+tools/timetable-import/*.pdf

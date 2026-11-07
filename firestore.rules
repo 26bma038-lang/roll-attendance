@@ -197,6 +197,13 @@ service cloud.firestore {
       }
     }
 
+    // ---------- NITH website notices (written only by tools/nith-notices with the Admin SDK) ----------
+
+    match /collegeFeed/{feedId} {
+      allow read: if validUser();
+      allow write: if false;
+    }
+
     // ---------- notices ----------
 
     function validNotice(data) {

@@ -96,4 +96,8 @@ private class FakeUserPreferencesRepository : UserPreferencesRepository {
     override suspend fun setNotificationPromptDone() {
         notificationPromptDone.value = true
     }
+    override val nithNoticesSeenAt = MutableStateFlow<java.time.Instant?>(null)
+    override suspend fun setNithNoticesSeenAt(at: java.time.Instant) {
+        nithNoticesSeenAt.value = at
+    }
 }

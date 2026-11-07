@@ -1,0 +1,53 @@
+{
+  "pages": [
+    {
+      "url": "https://nith.ac.in/academic-notices",
+      "category": "Academic",
+      "filter": false
+    },
+    {
+      "url": "https://nith.ac.in/examination-schedules",
+      "category": "Exams",
+      "filter": false
+    },
+    {
+      "url": "https://nith.ac.in/student-related-notices",
+      "category": "Students",
+      "filter": true
+    }
+  ],
+  "academicKeywords": [
+    "exam",
+    "examination",
+    "date sheet",
+    "datesheet",
+    "result",
+    "academic",
+    "calendar",
+    "semester",
+    "registration",
+    "classes",
+    "timetable",
+    "time table",
+    "scholarship",
+    "fee",
+    "holiday",
+    "suspension",
+    "attendance",
+    "re-appear",
+    "backlog"
+  ],
+  "examKeywords": [
+    "date sheet",
+    "datesheet",
+    "examination",
+    "exam schedule",
+    "mid-semester",
+    "mid semester",
+    "end semester",
+    "end-semester"
+  ],
+  "keep": 150,
+  "userAgent": "Mozilla/5.0 (compatible; RollApp/2.2; +https://github.com/26bma038-lang/roll-attendance)",
+  "timeoutMs": 20000
+}

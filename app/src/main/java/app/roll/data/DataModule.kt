@@ -10,6 +10,8 @@ import app.roll.data.college.DepartmentRepository
 import app.roll.data.college.FirestoreDepartmentRepository
 import app.roll.data.materials.FirestoreMaterialRepository
 import app.roll.data.materials.MaterialRepository
+import app.roll.data.feed.CollegeFeedRepository
+import app.roll.data.feed.FirestoreCollegeFeedRepository
 import app.roll.data.marks.FirestoreMarkRepository
 import app.roll.data.notices.FirestoreNoticeRepository
 import app.roll.data.notices.NoticeRepository
@@ -35,4 +37,5 @@ abstract class DataModule {
     @Binds abstract fun bindsNotices(impl: FirestoreNoticeRepository): NoticeRepository
     @Binds abstract fun bindsDepartments(impl: FirestoreDepartmentRepository): DepartmentRepository
     @Binds abstract fun bindsMaterials(impl: FirestoreMaterialRepository): MaterialRepository
+    @Binds abstract fun bindsCollegeFeed(impl: FirestoreCollegeFeedRepository): CollegeFeedRepository
 }

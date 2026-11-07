@@ -1,0 +1,19 @@
+{
+  "name": "roll-nith-notices",
+  "private": true,
+  "type": "module",
+  "description": "Copies academic notices from nith.ac.in into Roll (titles and links only).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "sync": "node src/sync.js",
+    "dry-run": "node src/sync.js --dry-run",
+    "test": "node --test test/parse.test.js test/feed.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "google-auth-library": "^11.3.3",
+    "node-html-parser": "^9.0.7"
+  }
+}

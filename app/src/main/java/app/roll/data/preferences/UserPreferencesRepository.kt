@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import app.roll.core.common.ApplicationScope
@@ -22,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.plus
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +52,10 @@ interface UserPreferencesRepository {
     /** The one-time "turn on notifications" explanation on Today was answered. */
     val notificationPromptDone: Flow<Boolean>
     suspend fun setNotificationPromptDone()
+
+    /** When the student last opened College notices (nith.ac.in "new" marks). Null at first. */
+    val nithNoticesSeenAt: Flow<Instant?>
+    suspend fun setNithNoticesSeenAt(at: Instant)
 }
 
 class DataStoreUserPreferencesRepository @Inject constructor(
@@ -98,6 +104,13 @@ class DataStoreUserPreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.NotificationPromptDone] = true }
     }
 
+    override val nithNoticesSeenAt: Flow<Instant?> =
+        dataStore.data.map { prefs -> prefs[Keys.NithNoticesSeenAt]?.let(Instant::ofEpochMilli) }
+
+    override suspend fun setNithNoticesSeenAt(at: Instant) {
+        dataStore.edit { it[Keys.NithNoticesSeenAt] = at.toEpochMilli() }
+    }
+
     private object Keys {
         val ThemeMode = stringPreferencesKey("theme_mode")
         val ReminderEnabled = booleanPreferencesKey("reminder_enabled")
@@ -105,6 +118,7 @@ class DataStoreUserPreferencesRepository @Inject constructor(
         val DeadlineReminders = booleanPreferencesKey("deadline_reminders")
         val ClassEndPrompts = booleanPreferencesKey("class_end_prompts")
         val NotificationPromptDone = booleanPreferencesKey("notification_prompt_done")
+        val NithNoticesSeenAt = longPreferencesKey("nith_notices_seen_at")
     }
 }
 

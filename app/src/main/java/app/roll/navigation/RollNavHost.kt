@@ -13,6 +13,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,6 +28,7 @@ import app.roll.core.designsystem.component.RollSnackbarHost
 import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.theme.Motion
 import app.roll.core.designsystem.theme.RollTheme
+import app.roll.data.feed.NithNoticeTracker
 import app.roll.feature.admin.AdminClassRoute
 import app.roll.feature.admin.AdminDepartmentRoute
 import app.roll.feature.admin.AdminDepartmentsScreen
@@ -46,7 +51,12 @@ import app.roll.feature.subjects.LeavePlannerRoute
 import app.roll.feature.subjects.SubjectDetailRoute
 import app.roll.feature.subjects.SubjectsRoute
 import app.roll.feature.today.TodayRoute
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
+import javax.inject.Inject
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 
 // Type-safe destinations. Only reached once the user is signed in and in a class.
@@ -151,8 +161,14 @@ private fun Screen(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostController) {
+private fun MainTabs(
+    isCR: Boolean,
+    isAdmin: Boolean,
+    navController: NavHostController,
+    badges: NavBadgesViewModel = hiltViewModel(),
+) {
     val tabs = if (isCR) Tab.entries else Tab.entries - Tab.Manage
+    val newCollegeNotices by badges.newCollegeNotices.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableIntStateOf(0) }
     if (selected >= tabs.size) selected = 0
     val openSettings = { navController.navigate(SettingsDest) }
@@ -164,7 +180,8 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
             RollBottomBar(
-                items = tabs.map { RollNavItem(it.label, it.icon) },
+                // New nith.ac.in notices: a quiet dot on Department, where College notices live.
+                items = tabs.map { RollNavItem(it.label, it.icon, dot = it == Tab.Department && newCollegeNotices > 0) },
                 selectedIndex = selected,
                 onSelect = { selected = it },
             )
@@ -195,7 +212,10 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
                     onOpenGroup = { navController.navigate(StudyGroupDest(it)) },
                     onOpenSettings = openSettings,
                 )
-                Tab.Department -> DepartmentRoute(onOpenSettings = openSettings)
+                Tab.Department -> DepartmentRoute(
+                    onOpenSettings = openSettings,
+                    onOpenCollegeNotices = { navController.navigate(CollegeNoticesDest) },
+                )
                 Tab.Manage -> ManageRoute(
                     onOpenSession = { navController.navigate(SessionDetailDest(it)) },
                     onOpenTimetable = { navController.navigate(TimetableDest) },
@@ -206,4 +226,10 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
             }
         }
     }
+}
+
+/** Dots on the bottom bar. One for now: new nith.ac.in notices, on Department. */
+@HiltViewModel
+class NavBadgesViewModel @Inject constructor(tracker: NithNoticeTracker) : ViewModel() {
+    val newCollegeNotices: StateFlow<Int> = tracker.newCount.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 }

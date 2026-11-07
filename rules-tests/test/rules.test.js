@@ -173,6 +173,7 @@ async function seed() {
     await setDoc(doc(f, 'departments/MA'), { ...departmentDoc('MA'), updatedAt: now });
     await setDoc(doc(f, 'materialSources/first-year'), materialSourceDoc({ syncedAt: now }));
     await setDoc(doc(f, 'materialSources/first-year/parts/0'), { n: 0, items: [] });
+    await setDoc(doc(f, 'collegeFeed/nith'), { items: [{ id: 'a', title: 'Date sheet', url: 'https://nith.ac.in/x.pdf', category: 'Exams' }], syncedAt: now });
     await setDoc(doc(f, 'users/student/assignmentStatus/a1'), { done: true, doneAt: now });
   });
 }
@@ -505,6 +506,28 @@ describe('study material', () => {
       await assertFails(deleteDoc(doc(f, 'materialSources/first-year')));
       await assertFails(setDoc(doc(f, 'materialSources/new'), materialSourceDoc()));
       await assertFails(setDoc(doc(f, 'materialSources/first-year/parts/1'), { n: 1, items: [] }));
+    }
+  });
+});
+
+describe('NITH notices feed', () => {
+  test('any valid student reads it', async () => {
+    await assertSucceeds(getDoc(doc(db('student'), 'collegeFeed/nith')));
+    await assertSucceeds(getDoc(doc(db('cs'), 'collegeFeed/nith')));
+  });
+
+  test('signed-out and non-college users cannot read', async () => {
+    await assertFails(getDoc(doc(anon(), 'collegeFeed/nith')));
+    await assertFails(getDoc(doc(db('gmail'), 'collegeFeed/nith')));
+  });
+
+  test('no client writes, not even the admin; only the sync script (Admin SDK) writes', async () => {
+    for (const uid of ['student', 'cr', 'admin']) {
+      const f = db(uid);
+      await assertFails(setDoc(doc(f, 'collegeFeed/nith'), { items: [] }));
+      await assertFails(updateDoc(doc(f, 'collegeFeed/nith'), { items: [] }));
+      await assertFails(deleteDoc(doc(f, 'collegeFeed/nith')));
+      await assertFails(setDoc(doc(f, 'collegeFeed/other'), { items: [] }));
     }
   });
 });

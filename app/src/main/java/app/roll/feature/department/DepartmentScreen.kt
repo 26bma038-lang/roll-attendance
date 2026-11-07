@@ -44,6 +44,7 @@ import app.roll.core.common.TimeSource
 import app.roll.core.common.localDateTimeIn
 import app.roll.core.designsystem.component.HairlineDivider
 import app.roll.core.designsystem.component.ListGroup
+import app.roll.core.designsystem.component.ListRow
 import app.roll.core.designsystem.component.RollBottomSheet
 import app.roll.core.designsystem.component.RollIconButton
 import app.roll.core.designsystem.component.RollTopAppBar
@@ -58,6 +59,7 @@ import app.roll.core.designsystem.theme.Spacing
 import app.roll.core.util.formatClock
 import app.roll.core.util.openUrl
 import app.roll.data.college.DepartmentRepository
+import app.roll.data.feed.NithNoticeTracker
 import app.roll.data.notices.NoticeDraft
 import app.roll.data.notices.NoticeRepository
 import app.roll.data.session.AppSession
@@ -99,6 +101,8 @@ data class DepartmentUiState(
     val classesHeld: Int = 0,
     val notices: List<Notice> = emptyList(),
     val canPostNotices: Boolean = false,
+    /** nith.ac.in notices since the student last opened College notices. */
+    val newCollegeNotices: Int = 0,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -108,6 +112,7 @@ class DepartmentViewModel @Inject constructor(
     classData: ClassData,
     departments: DepartmentRepository,
     time: TimeSource,
+    tracker: NithNoticeTracker,
     private val notices: NoticeRepository,
 ) : ViewModel() {
     private val context: StateFlow<ClassContext?> = session.context.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -138,7 +143,9 @@ class DepartmentViewModel @Inject constructor(
         )
     }
 
-    val uiState: StateFlow<DepartmentUiState> = combine(base, noticeList) { state, list -> state.copy(notices = list) }
+    val uiState: StateFlow<DepartmentUiState> = combine(base, noticeList, tracker.newCount) { state, list, newCount ->
+        state.copy(notices = list, newCollegeNotices = newCount)
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DepartmentUiState())
 
     fun postNotice(draft: NoticeDraft) {
@@ -160,12 +167,14 @@ class DepartmentViewModel @Inject constructor(
 @Composable
 fun DepartmentRoute(
     onOpenSettings: () -> Unit,
+    onOpenCollegeNotices: () -> Unit,
     viewModel: DepartmentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     DepartmentScreen(
         uiState = uiState,
         onOpenSettings = onOpenSettings,
+        onOpenCollegeNotices = onOpenCollegeNotices,
         onPostNotice = viewModel::postNotice,
         onPinNotice = viewModel::setPinned,
         onDeleteNotice = viewModel::deleteNotice,
@@ -179,6 +188,7 @@ fun DepartmentScreen(
     uiState: DepartmentUiState,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenCollegeNotices: () -> Unit = {},
     onPostNotice: (NoticeDraft) -> Unit = {},
     onPinNotice: (Notice, Boolean) -> Unit = { _, _ -> },
     onDeleteNotice: (Notice) -> Unit = {},
@@ -233,6 +243,18 @@ fun DepartmentScreen(
                     onPost = { writing = true },
                     onSelect = { selectedNoticeId = it.id },
                 )
+                ListGroup {
+                    HairlineDivider()
+                    ListRow(
+                        title = "College notices",
+                        subtitle = when (uiState.newCollegeNotices) {
+                            0 -> "From the admin and nith.ac.in: academic, exam and student notices"
+                            1 -> "1 new from nith.ac.in"
+                            else -> "${uiState.newCollegeNotices} new from nith.ac.in"
+                        },
+                        onClick = onOpenCollegeNotices,
+                    )
+                }
             }
             item(key = "week") {
                 SectionHeader("This week")

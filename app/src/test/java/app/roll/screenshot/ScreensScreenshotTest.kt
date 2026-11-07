@@ -44,7 +44,11 @@ import app.roll.feature.deadlines.DeadlinesScreen
 import app.roll.feature.deadlines.DeadlinesUiState
 import app.roll.feature.deadlines.deadlineItem
 import app.roll.domain.model.Notice
+import app.roll.domain.feed.NithCategory
+import app.roll.domain.feed.NithFeed
+import app.roll.domain.feed.NithNotice
 import app.roll.feature.notices.CollegeNoticesScreen
+import app.roll.feature.notices.FeedStatus
 import app.roll.feature.notices.CollegeNoticesUiState
 import app.roll.domain.materials.MaterialItem
 import app.roll.domain.materials.Study
@@ -401,12 +405,51 @@ class ScreensScreenshotTest {
         TodayScreen(todayState().copy(pinnedNotices = sampleNotices.filter { it.pinned }), { _, _ -> }, {}, {}, {})
     }
 
-    @Test fun departmentNotices_light() = shot("20_department_notices_light", tabs = true, selected = 3) {
-        DepartmentScreen(departmentState().copy(notices = sampleNotices, canPostNotices = true), {})
+    @Test fun departmentNotices_light() = shot("20_department_notices_light", tabs = true, selected = 4) {
+        DepartmentScreen(departmentState().copy(notices = sampleNotices, canPostNotices = true, newCollegeNotices = 2), {})
+    }
+
+    private fun website(id: String, title: String, category: NithCategory, date: LocalDate, label: String?, seenAt: java.time.Instant = nowInstant.minusSeconds(86_400 * 30)) =
+        NithNotice(id, title, "https://nith.ac.in/uploads/files/$id.pdf", category, label, date, seenAt)
+
+    private val websiteNotices = listOf(
+        website("w1", "UG End Semester Theory Examination Date Sheet (November/December 2026)", NithCategory.Exams, today.minusDays(3), "November 2026", nowInstant.minusSeconds(3600)),
+        website("w2", "Suspension of Classes on 30/10/2026 (Friday) in connection with Hill'ffair 2026", NithCategory.Students, today.minusDays(9), "October 2026", nowInstant.minusSeconds(3600)),
+        website("w3", "Notice Regarding Suspension of Classes after 3:00 PM on 06/10/2026", NithCategory.Academic, today.minusDays(32), "October 2026"),
+        website("w4", "Academic Calendar for the First Semester of UG and PG Programmes for 2026–27", NithCategory.Academic, today.minusDays(90), "August 2026"),
+        website("w5", "Link for Online Choice Filling and Priority Submission for 5th Semester", NithCategory.Academic, today.minusDays(400), null),
+    )
+
+    private fun collegeState(category: NithCategory? = null, admin: Boolean = false): CollegeNoticesUiState {
+        val adminNotices = sampleNotices.filter { it.college }
+        return CollegeNoticesUiState(
+            isAdmin = admin,
+            adminNotices = adminNotices,
+            entries = NithFeed.entries(adminNotices, websiteNotices, nowInstant.minusSeconds(86_400), category, java.time.ZoneId.of("Asia/Kolkata")),
+            category = category,
+            feedStatus = FeedStatus.Ready,
+            today = today,
+        )
     }
 
     @Test fun collegeNotices_light() = shot("21_college_notices_light") {
-        CollegeNoticesScreen(CollegeNoticesUiState(sampleNotices.filter { it.college }, today), {}, {}, { _, _ -> }, {})
+        CollegeNoticesScreen(collegeState(), {}, {}, {}, {}, { _, _ -> }, {})
+    }
+
+    @Test fun collegeNotices_dark() = shot("21_college_notices_dark", dark = true) {
+        CollegeNoticesScreen(collegeState(), {}, {}, {}, {}, { _, _ -> }, {})
+    }
+
+    @Test fun collegeNoticesExams_light() = shot("21_college_notices_exams_light") {
+        CollegeNoticesScreen(collegeState(NithCategory.Exams), {}, {}, {}, {}, { _, _ -> }, {})
+    }
+
+    @Test fun collegeNoticesEmpty_light() = shot("21_college_notices_empty_light") {
+        CollegeNoticesScreen(collegeState().copy(adminNotices = emptyList(), entries = emptyList(), category = NithCategory.Students), {}, {}, {}, {}, { _, _ -> }, {})
+    }
+
+    @Test fun collegeNoticesAdmin_light() = shot("21_college_notices_admin_light") {
+        CollegeNoticesScreen(collegeState(admin = true), {}, {}, {}, {}, { _, _ -> }, {})
     }
 
     private fun leaveState(): LeavePlannerUiState {

@@ -1,0 +1,15 @@
+{
+  "name": "roll-classroom-sync",
+  "private": true,
+  "type": "module",
+  "description": "Copies the study-material index (titles, subjects, Drive links) from a Google Classroom course into Roll.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "login": "node src/login.js",
+    "sync": "node src/sync.js",
+    "dry-run": "node src/sync.js --dry-run",
+    "test": "node --test test/parse.test.js test/index.test.js"
+  }
+}

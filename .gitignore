@@ -20,3 +20,11 @@ keystore/
 *.log
 .firebase/
 .firebaserc
+
+# Classroom sync secrets (OAuth client, refresh token, service-account key). Never commit.
+tools/classroom-sync/.secrets/
+tools/classroom-sync/raw*.json
+tools/classroom-sync/index*.json
+client_secret*.json
+*service-account*.json
+*-firebase-adminsdk-*.json

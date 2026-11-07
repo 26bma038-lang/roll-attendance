@@ -1,0 +1,52 @@
+{
+  "fy-ec-ma": {
+    "course": { "id": "626940139402", "name": "First year (EC, ECD, PH & MNC)" },
+    "topics": [
+      { "topicId": "t1", "name": "SYLLABUS" },
+      { "topicId": "t2", "name": "Academic Calendar" },
+      { "topicId": "t3", "name": "NOTES" },
+      { "topicId": "t4", "name": "SUNIL SIR’S NOTES" },
+      { "topicId": "t5", "name": "BOOKS" },
+      { "topicId": "t6", "name": "PRACTICAL FILES" },
+      { "topicId": "t7", "name": "WORKSHOP" },
+      { "topicId": "t8", "name": "Engineering Drawing" },
+      { "topicId": "t9", "name": "ASSIGNMENTS" },
+      { "topicId": "t10", "name": "ASSIGNMENT SOLUTIONS" },
+      { "topicId": "t11", "name": "QUESTION PAPERS" },
+      { "topicId": "t12", "name": "Lab manuals" }
+    ],
+    "materials": [
+      { "id": "m1", "topicId": "t1", "title": "Course structure", "updateTime": "2025-08-01T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "d1", "title": "First year scheme.pdf", "alternateLink": "https://drive.google.com/file/d/d1/view" } } }] },
+      { "id": "m2", "topicId": "t3", "title": "MA-111(Eng. Mathematics-1)", "updateTime": "2025-09-01T10:00:00Z",
+        "materials": [
+          { "driveFile": { "driveFile": { "id": "d2", "title": "Unit 1 Calculus.pdf", "alternateLink": "https://drive.google.com/file/d/d2/view" } } },
+          { "driveFile": { "driveFile": { "id": "d2", "title": "Unit 1 Calculus.pdf", "alternateLink": "https://drive.google.com/file/d/d2/view" } } },
+          { "link": { "url": "https://www.youtube.com/playlist?list=example", "title": "Lecture playlist" } }
+        ] },
+      { "id": "m3", "topicId": "t4", "title": "Fourier Series", "updateTime": "2025-09-02T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "d3", "title": "Fourier_Series_notes.pdf", "alternateLink": "https://drive.google.com/file/d/d3/view" } } }] },
+      { "id": "m4", "topicId": "t6", "title": "CS-102", "updateTime": "2025-09-03T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "d4", "title": "C lab file.pdf", "alternateLink": "https://drive.google.com/file/d/d4/view" } } }] },
+      { "id": "m5", "topicId": "t3", "title": "CS-101 (Programming Fundamentals)", "updateTime": "2025-09-04T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "d5", "title": "Pointers.pdf", "alternateLink": "https://drive.google.com/file/d/d5/view" } } }] },
+      { "id": "m6", "topicId": "t11", "title": "MA-111(Eng. Mathematics-1)", "updateTime": "2025-12-20T10:00:00Z",
+        "materials": [
+          { "driveFile": { "driveFile": { "id": "p1", "title": "PAPER 1.pdf", "alternateLink": "https://drive.google.com/file/d/p1/view" } } },
+          { "driveFile": { "driveFile": { "id": "p2", "title": "MID SEM 2024-25.pdf", "alternateLink": "https://drive.google.com/file/d/p2/view" } } },
+          { "driveFile": { "driveFile": { "id": "p3", "title": "END SEM 2025-26.pdf", "alternateLink": "https://drive.google.com/file/d/p3/view" } } },
+          { "driveFile": { "driveFile": { "id": "p4", "title": "END SEM 2024-25.pdf", "alternateLink": "https://drive.google.com/file/d/p4/view" } } },
+          { "driveFile": { "driveFile": { "id": "p5", "title": "MID SEM 2023(NEW).pdf", "alternateLink": "https://drive.google.com/file/d/p5/view" } } }
+        ] },
+      { "id": "m7", "topicId": "t7", "title": "CIVIL", "updateTime": "2025-09-05T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "w1", "title": "Civil workshop.pdf", "alternateLink": "https://drive.google.com/file/d/w1/view" } } }] },
+      { "id": "m8", "topicId": "t12", "title": "Physics lab", "updateTime": "2025-09-06T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "x1", "title": "Manual.pdf", "alternateLink": "https://drive.google.com/file/d/x1/view" } } }] },
+      { "id": "m9", "title": "Welcome", "updateTime": "2025-07-20T10:00:00Z", "materials": [] },
+      { "id": "m10", "topicId": "t9", "title": "MA-111(Eng. Mathematics-1)", "updateTime": "2025-10-01T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "a1", "title": "Assignment 2.pdf", "alternateLink": "https://drive.google.com/file/d/a1/view" } } }] },
+      { "id": "m11", "topicId": "t9", "title": "MA-111(Eng. Mathematics-1)", "updateTime": "2025-10-08T10:00:00Z",
+        "materials": [{ "driveFile": { "driveFile": { "id": "a2", "title": "Assignment 10.pdf", "alternateLink": "https://drive.google.com/file/d/a2/view" } } }] }
+    ]
+  }
+}

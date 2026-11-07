@@ -31,7 +31,7 @@ sealed interface MaterialsLoad {
 
     data object Failed : MaterialsLoad
 
-    /** Sources listing this branch, from the server or the offline cache. Year filtering is up to the caller. */
+    /** Sources listing this branch or all branches, from the server or the offline cache. Year filtering is up to the caller. */
     data class Loaded(val sources: List<MaterialSource>) : MaterialsLoad
 }
 
@@ -55,7 +55,9 @@ class FirestoreMaterialRepository @Inject constructor(
 
     override fun observe(branch: String): Flow<MaterialsLoad> =
         firestore.collection(COLLECTION)
-            .whereArrayContains("branches", branch.uppercase())
+            // A source lists its branches, or "*" for all of them (first-year material is the same
+            // for every branch). One query covers both.
+            .whereArrayContainsAny("branches", listOf(branch.uppercase(), MaterialSource.ALL_BRANCHES))
             // INCLUDE: an empty cache followed by an empty server answer must still tell us
             // "from the server", or a student with no material would look offline.
             .snapshots(MetadataChanges.INCLUDE)

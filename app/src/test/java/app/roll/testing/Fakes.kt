@@ -11,6 +11,7 @@ import app.roll.data.marks.MarkRepository
 import app.roll.data.marks.MyMarks
 import app.roll.data.materials.MaterialRepository
 import app.roll.data.materials.MaterialsLoad
+import app.roll.domain.materials.MaterialSource
 import app.roll.data.notices.NoticeDraft
 import app.roll.data.notices.NoticeRepository
 import app.roll.data.preferences.ReminderSettings
@@ -175,11 +176,15 @@ class FakeMaterialRepository(load: MaterialsLoad) : MaterialRepository {
     val load = MutableStateFlow(load)
     val branchesAsked = mutableListOf<String>()
 
-    /** Like Firestore's array-contains query: only sources that list the branch. */
+    /** Like the Firestore array-contains-any query: sources that list the branch or "*". */
     override fun observe(branch: String): Flow<MaterialsLoad> {
         branchesAsked += branch
         return load.map { current ->
-            if (current is MaterialsLoad.Loaded) MaterialsLoad.Loaded(current.sources.filter { branch in it.branches }) else current
+            if (current is MaterialsLoad.Loaded) {
+                MaterialsLoad.Loaded(current.sources.filter { branch in it.branches || MaterialSource.ALL_BRANCHES in it.branches })
+            } else {
+                current
+            }
         }
     }
 }

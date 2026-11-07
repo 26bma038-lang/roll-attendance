@@ -14,11 +14,17 @@ data class MaterialSource(
     val credit: String,
     val classroomUrl: String,
     val years: List<Int>,
+    /** Branch codes, or [ALL_BRANCHES] for every branch Roll supports. */
     val branches: List<String>,
     val items: List<MaterialItem>,
 ) {
     fun appliesTo(branch: String, year: Int): Boolean =
-        year in years && branches.any { it.equals(branch, ignoreCase = true) }
+        year in years && branches.any { it == ALL_BRANCHES || it.equals(branch, ignoreCase = true) }
+
+    companion object {
+        /** `"branches": ["*"]`: every branch in [app.roll.domain.college.NithConfig.branches]. */
+        const val ALL_BRANCHES = "*"
+    }
 }
 
 data class MaterialItem(

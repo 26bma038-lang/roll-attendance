@@ -98,7 +98,7 @@ collections and too expensive for growing ones, so:
 | class and college `notices` | Plain listener on `status == "active"`; deleted ones drop out of the query | A handful at a time |
 | `assignmentStatus`, `subjects`, `timetable`, `departments`, class doc | Plain listener | Tens of small docs |
 | `members` | Plain listener, CRs and the admin only | One screen, few users |
-| `materialSources` | Plain listener on `branches` array-contains, year filtered on the phone | One doc per Classroom course, rewritten only when the course changes |
+| `materialSources` | Plain listener on `branches` array-contains-any [branch, `"*"`], year filtered on the phone | One doc per Classroom course, rewritten only when the course changes |
 
 ### On-device only (no server)
 

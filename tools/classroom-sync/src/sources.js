@@ -8,8 +8,15 @@ export function loadSources(file = join(ROOT, 'sources.json')) {
   return validateSources(JSON.parse(readFileSync(file, 'utf8')));
 }
 
+/** `"branches": "*"` means every branch Roll supports (NithConfig.branches in the app). */
+export const ALL_BRANCHES = '*';
+
+/**
+ * Checks sources.json and normalises it: `"branches": "*"` becomes `["*"]`, so Firestore always
+ * holds a list and the app can match it with one array-contains-any query.
+ */
 export function validateSources(sources) {
-  if (!Array.isArray(sources)) throw new SyncError('sources.json must be a list.');
+  if (!Array.isArray(sources) || sources.length === 0) throw new SyncError('sources.json must be a non-empty list.');
   const ids = new Set();
   for (const s of sources) {
     for (const key of ['id', 'courseId', 'title', 'credit', 'classroomUrl']) {
@@ -21,11 +28,13 @@ export function validateSources(sources) {
     if (!Array.isArray(s.years) || !s.years.length || !s.years.every((y) => Number.isInteger(y) && y >= 1 && y <= 5)) {
       throw new SyncError(`sources.json: "${s.id}" needs "years", e.g. [1].`);
     }
+    // "*", or ["*"] when validating an already-normalised list.
+    if (s.branches === ALL_BRANCHES || (Array.isArray(s.branches) && s.branches.length === 1 && s.branches[0] === ALL_BRANCHES)) continue;
     if (!Array.isArray(s.branches) || !s.branches.length || !s.branches.every((b) => /^[A-Z]{2}$/.test(b))) {
-      throw new SyncError(`sources.json: "${s.id}" needs "branches", e.g. ["EC", "MA"].`);
+      throw new SyncError(`sources.json: "${s.id}" needs "branches": "*" (every branch) or a list, e.g. ["EC", "MA"].`);
     }
   }
-  return sources;
+  return sources.map((s) => (s.branches === ALL_BRANCHES ? { ...s, branches: [ALL_BRANCHES] } : s));
 }
 
 /** True while a credit line still holds a placeholder such as "<SENIOR NAME>" or "___". */

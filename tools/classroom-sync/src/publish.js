@@ -91,3 +91,13 @@ export function planWrite(source, items, existing, { limit = PART_LIMIT_BYTES, f
 function range(from, to) {
   return Array.from({ length: Math.max(0, to - from) }, (_, i) => from + i);
 }
+
+/**
+ * Source documents in Firestore that sources.json no longer lists (renamed or removed), so a
+ * full sync can delete them. Never returns anything when sources.json lists nothing.
+ */
+export function staleSourceIds(existingIds, sources) {
+  const keep = new Set(sources.map((s) => s.id));
+  if (keep.size === 0) return [];
+  return existingIds.filter((id) => !keep.has(id)).sort();
+}

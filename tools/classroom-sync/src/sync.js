@@ -1,4 +1,5 @@
-// `npm run sync`: reads every course in sources.json and writes its material index to Firestore.
+// `npm run sync`: reads every course in sources.json and writes its material index to Firestore,
+// then deletes source documents sources.json no longer lists.
 // `npm run dry-run`: the same, but prints the index instead of writing it.
 //
 //   --dry-run          print the index, write nothing
@@ -59,8 +60,8 @@ async function main() {
     if (unnamed.length) {
       throw new SyncError(`Fill in the credit line in sources.json before syncing (${unnamed.join(', ')}): Roll must credit the senior.`);
     }
-    const { openFirestore, publishSource } = await import('./firestore.js'); // only the real sync needs firebase-admin
-    firestore = { ...openFirestore(), publishSource };
+    const { openFirestore, publishSource, removeStaleSources } = await import('./firestore.js'); // only the real sync needs firebase-admin
+    firestore = { ...openFirestore(), publishSource, removeStaleSources };
     console.error(`Writing to Firestore project ${firestore.projectId}${process.env.FIRESTORE_EMULATOR_HOST ? ' (emulator)' : ''}.`);
   }
 
@@ -85,6 +86,13 @@ async function main() {
         ? `\n  written: materialSources/${source.id}, ${result.itemCount} files${parts}`
         : `\n  unchanged: materialSources/${source.id}, nothing written`);
     }
+  }
+
+  // Every source synced: remove documents sources.json no longer lists (renamed or dropped
+  // sources). Skipped with --source, which only saw part of the list.
+  if (firestore && !values.source) {
+    const removed = await firestore.removeStaleSources(firestore.db, sources);
+    for (const id of removed) console.error(`\n  deleted: materialSources/${id} (no longer in sources.json)`);
   }
 
   if (values['save-raw']) writeFileSync(values['save-raw'], JSON.stringify(raws, null, 2) + '\n');

@@ -139,7 +139,7 @@ function materialSourceDoc(overrides = {}) {
   return {
     title: 'First year', credit: 'Material shared by a senior',
     classroomUrl: 'https://classroom.google.com/w/NjI2OTQwMTM5NDAy/t/all',
-    years: [1], branches: ['EC', 'MA'], contentHash: 'h', itemCount: 1, partCount: 0,
+    years: [1], branches: ['*'], contentHash: 'h', itemCount: 1, partCount: 0,
     items: [{ id: 'i1', section: 'pyq', sectionLabel: 'Previous year papers', subjectCode: 'MA-111',
       subjectName: 'Eng. Mathematics-1', title: 'END SEM 2024-25', url: 'https://drive.google.com/file/d/p/view' }],
     ...overrides,
@@ -171,8 +171,8 @@ async function seed() {
     await setDoc(doc(f, `classes/${CLASS}/notices/n1`), { ...noticeDoc(), createdAt: now, updatedAt: now });
     await setDoc(doc(f, 'notices/c1'), { ...noticeDoc({ createdByName: 'Admin' }), createdAt: now, updatedAt: now });
     await setDoc(doc(f, 'departments/MA'), { ...departmentDoc('MA'), updatedAt: now });
-    await setDoc(doc(f, 'materialSources/fy-ec-ma'), materialSourceDoc({ syncedAt: now }));
-    await setDoc(doc(f, 'materialSources/fy-ec-ma/parts/0'), { n: 0, items: [] });
+    await setDoc(doc(f, 'materialSources/first-year'), materialSourceDoc({ syncedAt: now }));
+    await setDoc(doc(f, 'materialSources/first-year/parts/0'), { n: 0, items: [] });
     await setDoc(doc(f, 'users/student/assignmentStatus/a1'), { done: true, doneAt: now });
   });
 }
@@ -479,26 +479,32 @@ describe('departments', () => {
 
 describe('study material', () => {
   test('any valid student reads the index and its parts', async () => {
-    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/fy-ec-ma')));
-    await assertSucceeds(getDoc(doc(db('cs'), 'materialSources/fy-ec-ma')));
+    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/first-year')));
+    await assertSucceeds(getDoc(doc(db('cs'), 'materialSources/first-year')));
     await assertSucceeds(getDocs(collection(db('student'), 'materialSources')));
-    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/fy-ec-ma/parts/0')));
+    await assertSucceeds(getDoc(doc(db('student'), 'materialSources/first-year/parts/0')));
+  });
+
+  test("the app's query works: sources for my branch or every branch", async () => {
+    const q = query(collection(db('cs'), 'materialSources'), where('branches', 'array-contains-any', ['CS', '*']));
+    const snapshot = await assertSucceeds(getDocs(q));
+    if (snapshot.size !== 1) throw new Error(`expected the "*" source, got ${snapshot.size}`);
   });
 
   test('signed-out and non-college users cannot read', async () => {
-    await assertFails(getDoc(doc(anon(), 'materialSources/fy-ec-ma')));
-    await assertFails(getDoc(doc(anon(), 'materialSources/fy-ec-ma/parts/0')));
-    await assertFails(getDoc(doc(db('gmail'), 'materialSources/fy-ec-ma')));
+    await assertFails(getDoc(doc(anon(), 'materialSources/first-year')));
+    await assertFails(getDoc(doc(anon(), 'materialSources/first-year/parts/0')));
+    await assertFails(getDoc(doc(db('gmail'), 'materialSources/first-year')));
   });
 
   test('no client writes, not even the admin; only the sync script (Admin SDK) writes', async () => {
     for (const uid of ['student', 'cr', 'admin']) {
       const f = db(uid);
-      await assertFails(setDoc(doc(f, 'materialSources/fy-ec-ma'), materialSourceDoc({ credit: 'x' })));
-      await assertFails(updateDoc(doc(f, 'materialSources/fy-ec-ma'), { items: [] }));
-      await assertFails(deleteDoc(doc(f, 'materialSources/fy-ec-ma')));
+      await assertFails(setDoc(doc(f, 'materialSources/first-year'), materialSourceDoc({ credit: 'x' })));
+      await assertFails(updateDoc(doc(f, 'materialSources/first-year'), { items: [] }));
+      await assertFails(deleteDoc(doc(f, 'materialSources/first-year')));
       await assertFails(setDoc(doc(f, 'materialSources/new'), materialSourceDoc()));
-      await assertFails(setDoc(doc(f, 'materialSources/fy-ec-ma/parts/1'), { n: 1, items: [] }));
+      await assertFails(setDoc(doc(f, 'materialSources/first-year/parts/1'), { n: 1, items: [] }));
     }
   });
 });

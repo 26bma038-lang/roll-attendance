@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { buildIndex } from '../src/index.js';
-import { contentHash, estimateBytes, planWrite, splitItems } from '../src/publish.js';
-import { hasPlaceholder } from '../src/sources.js';
+import { contentHash, estimateBytes, planWrite, splitItems, staleSourceIds } from '../src/publish.js';
+import { hasPlaceholder, validateSources } from '../src/sources.js';
 
-const source = JSON.parse(readFileSync(new URL('../sources.json', import.meta.url), 'utf8'))[0];
+const source = validateSources(JSON.parse(readFileSync(new URL('../sources.json', import.meta.url), 'utf8')))[0];
 const raw = JSON.parse(readFileSync(new URL('./fixtures/sample-course.json', import.meta.url), 'utf8'))[source.id];
 const { items } = buildIndex(source, raw);
 
@@ -79,4 +79,14 @@ test('credit placeholders are caught', () => {
   assert.equal(hasPlaceholder('Material shared by <SENIOR NAME>'), true);
   assert.equal(hasPlaceholder('Material shared by ___'), true);
   assert.equal(hasPlaceholder('Material shared by A. Senior'), false);
+});
+
+test('sources no longer in sources.json are stale; the listed ones never are', () => {
+  assert.deepEqual(staleSourceIds(['fy-ec-ma', 'first-year'], [source]), ['fy-ec-ma']);
+  assert.deepEqual(staleSourceIds(['first-year'], [source]), []);
+  assert.deepEqual(staleSourceIds(['first-year', 'fy-ec-ma'], []), []);
+});
+
+test('the document stores branches as a list, so "*" can be matched', () => {
+  assert.deepEqual(planWrite(source, items, null).doc.branches, ['*']);
 });

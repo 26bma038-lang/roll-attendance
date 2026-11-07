@@ -101,11 +101,36 @@ export function parseAcademicYear(fileName) {
 const EXTENSION = /\.(pdf|docx?|pptx?|xlsx?|jpe?g|png|txt|zip)$/i;
 
 /**
+ * Spelling slips in the course, fixed for display only (the Classroom stays as it is).
+ * Whole words, any case, plural too; the fix keeps the original's case.
+ */
+export const DISPLAY_FIXES = [
+  ['assignement', 'assignment'],
+];
+
+function matchCase(original, replacement) {
+  if (original === original.toUpperCase()) return replacement.toUpperCase();
+  if (original[0] === original[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  return replacement;
+}
+
+/** Applies [DISPLAY_FIXES] to a post or file title: "ASSIGNEMENT SOLUTIONS" → "ASSIGNMENT SOLUTIONS". */
+export function fixTypos(text) {
+  let out = String(text ?? '');
+  for (const [wrong, right] of DISPLAY_FIXES) {
+    // Not inside a longer word: "Reassignement" is left alone, "Assignements" is fixed.
+    const word = new RegExp(`(?<![a-z])${wrong}(?=s?(?![a-z]))`, 'gi');
+    out = out.replace(word, (match) => matchCase(match, right));
+  }
+  return out;
+}
+
+/**
  * File name → title shown in the app: no extension, underscores as spaces, a space before
- * "(" so "MID SEM 2023(NEW)" reads "MID SEM 2023 (NEW)", single spaces.
+ * "(" so "MID SEM 2023(NEW)" reads "MID SEM 2023 (NEW)", single spaces, typos fixed.
  */
 export function displayTitle(fileName) {
-  return String(fileName ?? '')
+  return fixTypos(fileName)
     .trim()
     .replace(EXTENSION, '')
     .replace(/_/g, ' ')

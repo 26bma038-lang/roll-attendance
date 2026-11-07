@@ -69,23 +69,28 @@ class StudyViewModelTest {
         item("k1", "calendar", "Calendar 2026-27", code = null, name = "Academic Calendar", itemTitle = "Academic Calendar", year = "2026-27"),
     )
 
+    /** As tools/classroom-sync writes it: every branch, first year only. */
     private val firstYear = MaterialSource(
-        id = "fy-ec-ma",
+        id = "first-year",
         title = "First year",
         credit = "Material shared by Krish Bhutani",
         classroomUrl = "https://classroom.google.com/w/NjI2OTQwMTM5NDAy/t/all",
         years = listOf(1),
-        branches = listOf("EC", "MA"),
+        branches = listOf(MaterialSource.ALL_BRANCHES),
         items = firstYearItems,
     )
 
+    /** A source for one branch and year only, to show branch lists still work next to "*". */
     private val secondYearCs = MaterialSource(
         id = "sy-cs", title = "Second year", credit = "Material shared by someone", classroomUrl = "",
         years = listOf(2), branches = listOf("CS"),
         items = listOf(item("x1", "notes", "Data structures", code = "CS-201", name = "DSA", itemTitle = "CS-201(DSA)")),
     )
 
-    private val repository = FakeMaterialRepository(MaterialsLoad.Loaded(listOf(firstYear, secondYearCs)))
+    private var repository = FakeMaterialRepository(MaterialsLoad.Loaded(listOf(firstYear)))
+
+    /** Every branch Roll supports, as in NithConfig.branches. */
+    private val branches = listOf("ma", "cs", "ch", "ce", "me", "ec")
 
     /** A signed-in student from [email], e.g. 26bma038 = 2026 batch, MA. */
     private fun materials(scope: TestScope, email: String = "26bma038@nith.ac.in"): StudyMaterials {
@@ -123,36 +128,43 @@ class StudyViewModelTest {
     }
 
     @Test
-    fun firstYearEcStudent_seesItToo() = runTest {
-        home(this, "26bec012@nith.ac.in").uiState.test {
-            assertEquals(StudyStatus.Ready, expectMostRecentItem().status)
+    fun firstYearStudentOfEveryBranch_seesTheMaterial() = runTest {
+        for (branch in branches) {
+            home(this, "26b${branch}001@nith.ac.in").uiState.test {
+                val state = expectMostRecentItem()
+                assertEquals("26b${branch}001", StudyStatus.Ready, state.status)
+                assertEquals("26b${branch}001", listOf("CS-101", "CS-102", "MA-111"), state.subjects.map { (it.group as StudyGroup.Subject).code })
+            }
         }
     }
 
     @Test
-    fun otherBranch_seesTheEmptyState() = runTest {
-        // CS has a source, but for second year.
-        home(this, "26bcs005@nith.ac.in").uiState.test {
-            val state = expectMostRecentItem()
-            assertEquals(StudyStatus.NotHereYet, state.status)
-            assertTrue(state.subjects.isEmpty())
-        }
-    }
-
-    @Test
-    fun secondYearMaStudent_seesTheEmptyState() = runTest {
+    fun secondYearStudentOfEveryBranch_seesTheEmptyState() = runTest {
         // 2025 batch in November 2026 = semester 3 = second year.
-        home(this, "25bma010@nith.ac.in").uiState.test {
-            assertEquals(StudyStatus.NotHereYet, expectMostRecentItem().status)
+        for (branch in branches) {
+            home(this, "25b${branch}010@nith.ac.in").uiState.test {
+                val state = expectMostRecentItem()
+                assertEquals("25b${branch}010", StudyStatus.NotHereYet, state.status)
+                assertTrue(state.subjects.isEmpty())
+            }
         }
     }
 
     @Test
-    fun secondYearCsStudent_seesTheCsSource() = runTest {
+    fun aBranchListedSource_reachesOnlyThatBranchAndYear() = runTest {
+        repository = FakeMaterialRepository(MaterialsLoad.Loaded(listOf(firstYear, secondYearCs)))
         home(this, "25bcs001@nith.ac.in").uiState.test {
             val state = expectMostRecentItem()
             assertEquals(StudyStatus.Ready, state.status)
             assertEquals(listOf("CS-201"), state.subjects.map { (it.group as StudyGroup.Subject).code })
+        }
+        home(this, "25bma001@nith.ac.in").uiState.test {
+            assertEquals(StudyStatus.NotHereYet, expectMostRecentItem().status)
+        }
+        // First-years of CS still get only the "*" material, not the second-year CS source.
+        home(this, "26bcs001@nith.ac.in").uiState.test {
+            val codes = expectMostRecentItem().subjects.map { (it.group as StudyGroup.Subject).code }
+            assertEquals(listOf("CS-101", "CS-102", "MA-111"), codes)
         }
     }
 

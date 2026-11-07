@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   SUNIL_SIR_LABEL,
+  DISPLAY_FIXES,
   displayTitle,
+  fixTypos,
   guessMimeType,
   mapTopic,
   parseAcademicYear,
@@ -103,4 +105,15 @@ test('mime type is guessed from the extension', () => {
   assert.equal(guessMimeType('a.pdf'), 'application/pdf');
   assert.equal(guessMimeType('a.PDF'), 'application/pdf');
   assert.equal(guessMimeType('Google Doc'), null);
+});
+
+test('display-only typo fixes keep the case and only touch whole words', () => {
+  assert.deepEqual(DISPLAY_FIXES.map(([wrong]) => wrong), ['assignement']);
+  assert.equal(fixTypos('Assignement'), 'Assignment');
+  assert.equal(fixTypos('ASSIGNEMENT SOLUTIONS'), 'ASSIGNMENT SOLUTIONS');
+  assert.equal(fixTypos('assignements 2'), 'assignments 2');
+  assert.equal(fixTypos('Workshop Assignement-3'), 'Workshop Assignment-3');
+  assert.equal(fixTypos('Reassignement'), 'Reassignement');
+  assert.equal(fixTypos('Assignment'), 'Assignment');
+  assert.equal(displayTitle('Assignement_1.pdf'), 'Assignment 1');
 });

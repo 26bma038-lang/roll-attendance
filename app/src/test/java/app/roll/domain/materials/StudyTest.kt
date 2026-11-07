@@ -30,6 +30,15 @@ class StudyTest {
     }
 
     @Test
+    fun starMeansEveryBranch_butStillOnlyItsYears() {
+        val source = MaterialSource("first-year", "t", "c", "u", listOf(1), listOf(MaterialSource.ALL_BRANCHES), emptyList())
+        for (branch in listOf("MA", "CS", "CH", "CE", "ME", "EC")) {
+            assertTrue(branch, source.appliesTo(branch, 1))
+            assertFalse(branch, source.appliesTo(branch, 2))
+        }
+    }
+
+    @Test
     fun paperDetail_onlyWhenTheFileNameSaysMore() {
         assertNull(Study.paperDetail(item("a", title = "END SEM 2025-26", exam = "END", year = "2025-26")))
         assertNull(Study.paperDetail(item("b", title = "Mid-sem exam 2024-2025", exam = "MID", year = "2024-25")))

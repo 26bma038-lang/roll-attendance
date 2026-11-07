@@ -8,13 +8,15 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cert, initializeApp } from 'firebase-admin/app';
+import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { GoogleAuth, JWT } from 'google-auth-library';
 import { SECRETS_DIR, SyncError } from './auth.js';
-import { planWrite } from './publish.js';
+import { planWrite, staleSourceIds } from './publish.js';
 
 export const SERVICE_ACCOUNT_FILE = join(SECRETS_DIR, 'service-account.json');
 const COLLECTION = 'materialSources';
+const SCOPES = ['https://www.googleapis.com/auth/datastore', 'https://www.googleapis.com/auth/cloud-platform'];
 
 function loadServiceAccount() {
   let text = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -38,13 +40,22 @@ function loadServiceAccount() {
   return key;
 }
 
+/**
+ * The service account signs in through an explicit google-auth-library client. Passing the key
+ * to firebase-admin with `cert()` makes it hand Firestore the deprecated `credentials` option,
+ * which prints a warning on every run.
+ */
 export function openFirestore() {
   if (process.env.FIRESTORE_EMULATOR_HOST) {
     const projectId = process.env.FIREBASE_PROJECT ?? 'demo-roll';
     return { db: getFirestore(initializeApp({ projectId })), projectId };
   }
   const key = loadServiceAccount();
-  return { db: getFirestore(initializeApp({ credential: cert(key), projectId: key.project_id })), projectId: key.project_id };
+  const projectId = key.project_id;
+  const authClient = new JWT({ email: key.client_email, key: key.private_key, scopes: SCOPES });
+  const db = getFirestore(initializeApp({ projectId }));
+  db.settings({ auth: new GoogleAuth({ authClient, projectId }) });
+  return { db, projectId };
 }
 
 /**
@@ -73,4 +84,23 @@ export async function publishSource(db, source, items, { force = false } = {}) {
   for (const n of plan.deleteParts) batch.delete(ref.collection('parts').doc(String(n)));
   await batch.commit();
   return { changed: true, itemCount: items.length, partCount: plan.parts.length };
+}
+
+/**
+ * Deletes source documents (and their parts) that sources.json no longer lists, e.g. the old
+ * `fy-ec-ma` after the rename to `first-year`. Run only after a full sync of every source.
+ * @returns the deleted ids
+ */
+export async function removeStaleSources(db, sources) {
+  const existing = await db.collection(COLLECTION).listDocuments();
+  const stale = staleSourceIds(existing.map((ref) => ref.id), sources);
+  for (const id of stale) {
+    const ref = db.collection(COLLECTION).doc(id);
+    const parts = await ref.collection('parts').listDocuments();
+    const batch = db.batch();
+    for (const part of parts) batch.delete(part);
+    batch.delete(ref);
+    await batch.commit();
+  }
+  return stale;
 }

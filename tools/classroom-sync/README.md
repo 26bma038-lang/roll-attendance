@@ -10,6 +10,10 @@ Admin SDK).
 The courses to copy are listed in [`sources.json`](sources.json). To add one (say, second year),
 add an entry with its course id, credit line, Classroom link, years and branches. No code changes.
 
+`branches` is either a list of Roll branch codes (`["EC", "MA"]`) or `"*"` for every branch Roll
+supports. First-year subjects are the same for every branch at NITH, so the `first-year` source
+uses `"*"`. `years` is the year of study (1 = semesters 1–2).
+
 ## One-time setup
 
 You do this once, with a laptop and the NITH Google account that has joined the class.
@@ -77,7 +81,7 @@ class.
 ```
 npm run dry-run                      # index JSON on stdout, counts on stderr
 npm run dry-run -- --out index.json  # index into a file, counts on screen
-npm run dry-run -- --source fy-ec-ma # one source only
+npm run dry-run -- --source first-year # one source only
 npm run dry-run -- --save-raw raw.json
 ```
 
@@ -117,6 +121,11 @@ What it does, per source:
 - If Classroom suddenly returns no files while Roll has some, it stops instead of wiping the index.
   `--force` overrides that, and also rewrites an unchanged index.
 
+After every source is written, it deletes source documents that `sources.json` no longer lists
+(and their parts). Renaming a source's `id` therefore moves it in one run: the new document is
+written first, then the old one is deleted. `--source` skips this step, because it only saw one
+source.
+
 Flags: `--source <id>`, `--out index.json` (also keep a copy), `--fixture raw.json`.
 
 To try it without touching the real database, run it against the emulator from `rules-tests/`:
@@ -127,7 +136,7 @@ With `FIRESTORE_EMULATOR_HOST` set (emulators:exec does that) no key is needed.
 
 ```
 materialSources/{sourceId}
-  title, credit, classroomUrl, years: [1], branches: ["EC", "MA"]
+  title, credit, classroomUrl, years: [1], branches: ["*"]    ("*" = every branch)
   syncedAt        when the index last changed
   contentHash     used to skip writes when nothing changed
   itemCount       number of files

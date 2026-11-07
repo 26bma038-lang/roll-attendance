@@ -6,7 +6,8 @@ import { SCOPES, SyncError, oauthError } from '../src/auth.js';
 import { buildIndex, entryId, summarize } from '../src/index.js';
 import { validateSources } from '../src/sources.js';
 
-const sources = JSON.parse(readFileSync(new URL('../sources.json', import.meta.url), 'utf8'));
+const rawSources = JSON.parse(readFileSync(new URL('../sources.json', import.meta.url), 'utf8'));
+const sources = validateSources(rawSources);
 const source = sources[0];
 const raw = JSON.parse(readFileSync(new URL('./fixtures/sample-course.json', import.meta.url), 'utf8'))[source.id];
 
@@ -114,7 +115,9 @@ test('summary counts per section and subject', () => {
 });
 
 test('sources.json is valid; bad entries are rejected', () => {
-  assert.equal(validateSources(sources).length, 1);
+  assert.equal(validateSources(rawSources).length, 1);
+  assert.throws(() => validateSources([]), /non-empty/);
+  assert.throws(() => validateSources([{ ...source, branches: 'all' }]), SyncError);
   assert.throws(() => validateSources([{ ...source, branches: ['ec'] }]), SyncError);
   assert.throws(() => validateSources([{ ...source, years: [] }]), SyncError);
   assert.throws(() => validateSources([source, source]), /twice/);
@@ -136,4 +139,24 @@ test('login asks only for the three read-only scopes a student account can grant
     'classroom.topics.readonly',
     'classroom.courseworkmaterials.readonly',
   ]);
+});
+
+test('"branches": "*" means every branch and is stored as a list', () => {
+  assert.equal(rawSources[0].id, 'first-year');
+  assert.equal(rawSources[0].branches, '*');
+  assert.deepEqual(source.branches, ['*']);
+  assert.deepEqual(validateSources([{ ...rawSources[0], branches: ['EC', 'MA'] }])[0].branches, ['EC', 'MA']);
+});
+
+test('the Workshop "Assignement" typo is fixed in titles, ids unchanged', () => {
+  const typo = structuredClone(raw);
+  typo.materials.push({
+    id: 'm77', topicId: 't7', title: 'Assignement',
+    materials: [{ driveFile: { driveFile: { id: 'w9', title: 'Assignement 1.pdf' } } }],
+  });
+  const entry = buildIndex(source, typo).items.find((i) => i.driveFileId === 'w9');
+  assert.equal(entry.itemTitle, 'Assignment');
+  assert.equal(entry.subjectName, 'Assignment');
+  assert.equal(entry.title, 'Assignment 1');
+  assert.equal(entry.id, entryId(source.courseId, 'm77', 'w9'));
 });

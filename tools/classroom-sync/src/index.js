@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import {
   SECTION_ORDER,
   displayTitle,
+  fixTypos,
   guessMimeType,
   mapTopic,
   parseAcademicYear,
@@ -66,7 +67,7 @@ export function buildIndex(source, raw) {
         : `Unknown topic "${topic.sectionLabel}": its files go to section "other".`);
     }
 
-    const itemTitle = String(post.title ?? '').trim();
+    const itemTitle = fixTypos(post.title).trim();
     const subject = topic.subjectName
       ? { subjectCode: null, subjectName: topic.subjectName }
       : parseSubject(itemTitle);

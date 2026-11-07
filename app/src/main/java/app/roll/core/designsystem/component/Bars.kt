@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import app.roll.R
 import app.roll.core.designsystem.icon.RollIcons
 import app.roll.core.designsystem.preview.RollPreviewSurface
@@ -166,12 +169,15 @@ private fun RowScope.NavItem(
             tint = tint,
             modifier = Modifier.size(Sizes.icon),
         )
-        Text(
+        // Six tabs (CRs) on a narrow phone: long labels such as "Department" step down in size
+        // instead of being clipped.
+        val style = navLabelStyle()
+        BasicText(
             text = item.label,
-            style = navLabelStyle(),
-            color = tint,
+            style = style.copy(color = tint),
             maxLines = 1,
-            modifier = Modifier.padding(top = Spacing.xxs, bottom = Spacing.sm),
+            autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+            modifier = Modifier.padding(top = Spacing.xxs, bottom = Spacing.sm, start = Spacing.xxs, end = Spacing.xxs),
         )
     }
 }

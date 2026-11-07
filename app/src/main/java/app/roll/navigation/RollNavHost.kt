@@ -40,6 +40,8 @@ import app.roll.feature.manage.SessionDetailRoute
 import app.roll.feature.manage.TimetableRoute
 import app.roll.feature.notices.CollegeNoticesRoute
 import app.roll.feature.settings.SettingsRoute
+import app.roll.feature.study.StudyGroupRoute
+import app.roll.feature.study.StudyRoute
 import app.roll.feature.subjects.LeavePlannerRoute
 import app.roll.feature.subjects.SubjectDetailRoute
 import app.roll.feature.subjects.SubjectsRoute
@@ -65,12 +67,15 @@ import java.time.LocalDate
 @Serializable data object AdminDepartmentsDest
 @Serializable data class AdminDepartmentDest(val code: String)
 @Serializable data object CollegeNoticesDest
+/** A subject or group on the Study tab; [key] is [app.roll.domain.materials.StudyGroup.key]. */
+@Serializable data class StudyGroupDest(val key: String)
 
-/** Today · Deadlines · Subjects · Department, plus Manage for CRs. History lives in Subjects. */
+/** Today · Deadlines · Subjects · Study · Department, plus Manage for CRs. History lives in Subjects. */
 private enum class Tab(val label: String, val icon: Int) {
     Today("Today", RollIcons.Today),
     Deadlines("Deadlines", RollIcons.Deadlines),
     Subjects("Subjects", RollIcons.Subjects),
+    Study("Study", RollIcons.Study),
     Department("Department", RollIcons.Department),
     Manage("Manage", RollIcons.Manage),
 }
@@ -125,6 +130,7 @@ fun RollNavHost(
         }
         composable<AdminDepartmentDest> { Screen { AdminDepartmentRoute(onBack = back) } }
         composable<CollegeNoticesDest> { Screen { CollegeNoticesRoute(onBack = back) } }
+        composable<StudyGroupDest> { Screen { StudyGroupRoute(onBack = back) } }
     }
 }
 
@@ -184,6 +190,10 @@ private fun MainTabs(isCR: Boolean, isAdmin: Boolean, navController: NavHostCont
                     onManageSubjects = { navController.navigate(ManageSubjectsDest) },
                     onOpenHistory = { navController.navigate(HistoryDest) },
                     onPlanLeave = { navController.navigate(LeavePlannerDest) },
+                )
+                Tab.Study -> StudyRoute(
+                    onOpenGroup = { navController.navigate(StudyGroupDest(it)) },
+                    onOpenSettings = openSettings,
                 )
                 Tab.Department -> DepartmentRoute(onOpenSettings = openSettings)
                 Tab.Manage -> ManageRoute(

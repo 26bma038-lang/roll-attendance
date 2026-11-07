@@ -46,6 +46,15 @@ import app.roll.feature.deadlines.deadlineItem
 import app.roll.domain.model.Notice
 import app.roll.feature.notices.CollegeNoticesScreen
 import app.roll.feature.notices.CollegeNoticesUiState
+import app.roll.domain.materials.MaterialItem
+import app.roll.domain.materials.Study
+import app.roll.feature.study.StudyCredit
+import app.roll.feature.study.StudyGroupRow
+import app.roll.feature.study.StudyGroupScreen
+import app.roll.feature.study.StudyGroupUiState
+import app.roll.feature.study.StudyScreen
+import app.roll.feature.study.StudyStatus
+import app.roll.feature.study.StudyUiState
 import app.roll.feature.subjects.LeavePlannerScreen
 import app.roll.feature.subjects.LeavePlannerUiState
 import app.roll.feature.subjects.LeaveRow
@@ -167,6 +176,7 @@ class ScreensScreenshotTest {
                                 RollNavItem("Today", RollIcons.Today),
                                 RollNavItem("Deadlines", RollIcons.Deadlines),
                                 RollNavItem("Subjects", RollIcons.Subjects),
+                                RollNavItem("Study", RollIcons.Study),
                                 RollNavItem("Department", RollIcons.Department),
                                 RollNavItem("Manage", RollIcons.Manage),
                             ),
@@ -266,7 +276,7 @@ class ScreensScreenshotTest {
         className = "CSE DS — C",
     )
 
-    @Test fun manage_light() = shot("05_manage_light", tabs = true, selected = 4) { ManageScreen(manageState(), {}, {}, {}, {}, {}, {}, {}) }
+    @Test fun manage_light() = shot("05_manage_light", tabs = true, selected = 5) { ManageScreen(manageState(), {}, {}, {}, {}, {}, {}, {}) }
 
     @Test fun sessionDetail_light() = shot("06_session_detail_light") {
         SessionDetailScreen(
@@ -327,8 +337,8 @@ class ScreensScreenshotTest {
         classesHeld = 42,
     )
 
-    @Test fun department_light() = shot("14_department_light", tabs = true, selected = 3) { DepartmentScreen(departmentState(), {}) }
-    @Test fun department_dark() = shot("14_department_dark", dark = true, tabs = true, selected = 3) { DepartmentScreen(departmentState(), {}) }
+    @Test fun department_light() = shot("14_department_light", tabs = true, selected = 4) { DepartmentScreen(departmentState(), {}) }
+    @Test fun department_dark() = shot("14_department_dark", dark = true, tabs = true, selected = 4) { DepartmentScreen(departmentState(), {}) }
     @Test fun adminDepartment_light() = shot("15_admin_department_light") {
         AdminDepartmentScreen(Department(code = "MA", name = "Mathematics and Computing", links = listOf(DepartmentLink("Department page", "https://nith.ac.in"))), {}, {})
     }
@@ -434,4 +444,63 @@ class ScreensScreenshotTest {
     @Test fun profileSetup_dark() = shot("11_profile_dark", dark = true) {
         ProfileSetupScreen(ProfileSetupUiState(), identity, "Sahil Verma", {}, {})
     }
+
+    // ---------- Study ----------
+
+    private fun material(id: String, section: String, title: String, code: String? = "MA-111", name: String = "Eng. Mathematics-1", itemTitle: String = "MA-111(Eng. Mathematics-1)", exam: String? = null, year: String? = null) =
+        MaterialItem(id, section, section, code, name, itemTitle, title, exam, year, "https://drive.google.com/file/d/$id/view")
+
+    private val studyItems = listOf(
+        material("p1", "pyq", "END SEM 2025-26", exam = "END", year = "2025-26"),
+        material("p2", "pyq", "END SEM 2024-25", exam = "END", year = "2024-25"),
+        material("p3", "pyq", "MID SEM 2024-25", exam = "MID", year = "2024-25"),
+        material("p4", "pyq", "MID SEM 2023 (NEW)", exam = "MID", year = "2023"),
+        material("p5", "pyq", "PAPER 1"),
+        material("n1", "notes", "Unit 1 Calculus"),
+        material("n2", "notes", "Unit 2 Differential equations"),
+        material("b1", "books", "Thomas Calculus 14th edition"),
+        material("a1", "assignments", "Assignment 1"),
+        material("c1", "notes", "Pointers", "CS-101", "Programming Fundamentals", "CS-101(Programming Fundamentals)"),
+        material("c2", "pyq", "END SEM 2024-25", "CS-101", "Programming Fundamentals", "CS-101(Programming Fundamentals)", "END", "2024-25"),
+        material("e1", "notes", "Diodes", "EC-101", "Basic Electronics", "EC-101(Basic Electronics)"),
+        material("h1", "books", "English grammar", "HS-101", "Communication Skills", "HS-101(Communication Skills)"),
+        material("l1", "practicals", "C lab file", "CS-102", "CS-102", "CS-102"),
+        material("f1", "notes", "Fourier Series notes", null, "Sunil Sir's notes", "Fourier Series"),
+        material("y1", "syllabus", "First year scheme", null, "Course structure", "Course structure"),
+        material("k1", "calendar", "Academic calendar 2026-27", null, "Academic Calendar", "Academic Calendar"),
+        material("w1", "workshop", "Civil workshop", null, "CIVIL", "CIVIL"),
+        material("d1", "drawing", "Sheet 1", null, "Assignment", "Assignment"),
+    )
+
+    private fun studyState(query: String = ""): StudyUiState {
+        val counts = studyItems.groupingBy { Study.groupOf(it).key }.eachCount()
+        return StudyUiState(
+            status = StudyStatus.Ready,
+            credits = listOf(StudyCredit("Material shared by Krish Bhutani", "https://classroom.google.com/w/NjI2OTQwMTM5NDAy/t/all")),
+            subjects = Study.subjects(studyItems).map { StudyGroupRow(it, counts[it.key] ?: 0, Study.blocks(studyItems, it.key).map { b -> b.title }) },
+            others = Study.otherGroups(studyItems).map { StudyGroupRow(it, counts[it.key] ?: 0) },
+            query = query,
+            results = Study.search(studyItems, query),
+        )
+    }
+
+    @Test fun study_light() = shot("24_study_light", tabs = true, selected = 3) { StudyScreen(studyState(), {}, {}, {}, {}) }
+    @Test fun study_dark() = shot("24_study_dark", dark = true, tabs = true, selected = 3) { StudyScreen(studyState(), {}, {}, {}, {}) }
+    @Test fun studySearch_light() = shot("24_study_search_light", tabs = true, selected = 3) { StudyScreen(studyState("end sem"), {}, {}, {}, {}) }
+    @Test fun studyEmpty_light() = shot("24_study_empty_light", tabs = true, selected = 3) {
+        StudyScreen(StudyUiState(status = StudyStatus.NotHereYet), {}, {}, {}, {})
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h740dp-xxhdpi")
+    fun study_narrow() = shot("24_study_narrow_light", tabs = true, selected = 3) { StudyScreen(studyState(), {}, {}, {}, {}) }
+
+    private fun studySubjectState() = StudyGroupUiState(
+        status = StudyStatus.Ready,
+        group = Study.group(studyItems, "s:MA-111"),
+        blocks = Study.blocks(studyItems, "s:MA-111"),
+    )
+
+    @Test fun studySubject_light() = shot("25_study_subject_light") { StudyGroupScreen(studySubjectState(), {}, {}) }
+    @Test fun studySubject_dark() = shot("25_study_subject_dark", dark = true) { StudyGroupScreen(studySubjectState(), {}, {}) }
 }

@@ -24,4 +24,5 @@ object RollIcons {
     @DrawableRes val Department = R.drawable.ic_account_balance
     @DrawableRes val Admin = R.drawable.ic_admin_panel_settings
     @DrawableRes val OpenExternal = R.drawable.ic_open_in_new
+    @DrawableRes val Study = R.drawable.ic_school
 }

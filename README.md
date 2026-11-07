@@ -64,6 +64,9 @@ users/{uid}                    name, rollNo, email, batch, branch, classId, crea
   assignmentStatus/{aid}       done, doneAt                                             (private to the student)
 departments/{code}             code, name, about, hod, office, email, phone, links[], updatedAt   (admin writes)
 notices/{nid}                  college notice: text, pinned, createdAt, expiresAt, createdByName, status, updatedAt
+materialSources/{id}           study material index from a senior's Classroom: title, credit, classroomUrl,
+                               years[], branches[], items[], syncedAt   (written only by tools/classroom-sync)
+  parts/{n}                    items[] when a source outgrows one document
 classes/{nith-26-ma}           name, semester, batch, branch, crUids[], crNames[], requiredPercent,
                                timezone, memberCount, createdAt
   members/{uid}                name, rollNo, joinedAt          (read by CRs and the admin only)
@@ -95,6 +98,7 @@ collections and too expensive for growing ones, so:
 | class and college `notices` | Plain listener on `status == "active"`; deleted ones drop out of the query | A handful at a time |
 | `assignmentStatus`, `subjects`, `timetable`, `departments`, class doc | Plain listener | Tens of small docs |
 | `members` | Plain listener, CRs and the admin only | One screen, few users |
+| `materialSources` | Plain listener on `branches` array-contains, year filtered on the phone | One doc per Classroom course, rewritten only when the course changes |
 
 ### On-device only (no server)
 

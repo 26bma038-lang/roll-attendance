@@ -78,4 +78,24 @@ class StudyTest {
         val named = MaterialItem("n", "notes", "Notes", null, "Physics notes", "Physics notes", "Ch 1", null, null, "u")
         assertEquals("n:Physics notes", Study.groupOf(named).key)
     }
+
+    @Test
+    fun firstYearSubjects_everyCodeWithItsName_labsIncluded_fixedIds() {
+        fun at(code: String?, name: String, section: String) = MaterialItem(code + section, section, section, code, name, name, "t", null, null, "u")
+        val items = listOf(
+            at("MA-111", "Eng. Mathematics-1", "notes"),
+            at("MA-111", "Eng. Mathematics-1", "pyq"),
+            at("PH-102", "Eng. Physics LAB", "practicals"),
+            at("CS-101", "C Programming", "books"),
+            at(null, "Sunil Sir's notes", "notes"),
+            at(null, "CIVIL", "workshop"),
+        )
+        val subjects = FirstYearSubjects.from(items)
+        assertEquals(listOf("CS-101", "MA-111", "PH-102"), subjects.map { it.code })
+        assertEquals(listOf("fy-cs-101", "fy-ma-111", "fy-ph-102"), subjects.map { it.id })
+        assertEquals("Eng. Physics LAB", subjects[2].name)
+        assertEquals("MA-111", subjects[1].shortName)
+        assertEquals(listOf(0, 1, 2), subjects.map { it.colorIndex })
+        assertTrue(subjects.all { !it.archived && it.faculty.isEmpty() })
+    }
 }

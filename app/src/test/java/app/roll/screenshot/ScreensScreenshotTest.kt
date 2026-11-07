@@ -546,4 +546,39 @@ class ScreensScreenshotTest {
 
     @Test fun studySubject_light() = shot("25_study_subject_light") { StudyGroupScreen(studySubjectState(), {}, {}) }
     @Test fun studySubject_dark() = shot("25_study_subject_dark", dark = true) { StudyGroupScreen(studySubjectState(), {}, {}) }
+
+    // ---------- v2.2: screens that used to be empty ----------
+
+    @Test fun todayEmptyDay_light() = shot("26_today_empty_day_light", tabs = true) {
+        val subjectMap = subjects.associateBy { it.id }
+        val next = assignments.filter { it.id !in done && it.dueAt.isAfter(nowInstant) }.maxByOrNull { it.dueAt }!!
+        TodayScreen(
+            TodayUiState(
+                loading = false,
+                date = today,
+                hasTimetable = false,
+                nextDeadline = deadlineItem(next, subjectMap, done, nowInstant, zoneIst),
+                latestNotices = NithFeed.latestAcademic(websiteNotices),
+            ),
+            { _, _ -> }, {}, {}, {},
+        )
+    }
+
+    @Test fun todayNoCr_dark() = shot("26_today_no_cr_dark", dark = true, tabs = true) {
+        TodayScreen(TodayUiState(loading = false, date = today, noCrClassName = "MA 2026", latestNotices = NithFeed.latestAcademic(websiteNotices)), { _, _ -> }, {}, {}, {})
+    }
+
+    @Test fun todayCrNoTimetable_light() = shot("26_today_cr_setup_light", tabs = true) {
+        TodayScreen(TodayUiState(loading = false, date = today, isCR = true, hasTimetable = false), { _, _ -> }, {}, {}, {})
+    }
+
+    private val firstYear = listOf(
+        "CE-101" to "Applied Mechanics", "CS-101" to "C Programming", "CS-102" to "C Prog. LAB",
+        "CY-101" to "Engineering Chemistry", "EC-101" to "Basic Electronics", "MA-111" to "Eng. Mathematics-1",
+        "PH-101" to "Engineering Physics", "PH-102" to "Eng. Physics LAB",
+    ).mapIndexed { i, (code, name) -> Subject("fy-" + code.lowercase(), name, code, code, "", i % 8, false) }
+
+    @Test fun manageFirstYearOffer_light() = shot("27_manage_first_year_light", tabs = true, selected = 5) {
+        ManageScreen(manageState().copy(subjects = emptyList(), slotCount = 0, firstYearSubjects = firstYear), {}, {}, {}, {}, {}, {}, {})
+    }
 }

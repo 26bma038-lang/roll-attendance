@@ -58,7 +58,10 @@ import app.roll.core.designsystem.theme.RollTheme
 import app.roll.core.designsystem.theme.Sizes
 import app.roll.core.designsystem.theme.Spacing
 import app.roll.core.util.formatClock
+import app.roll.core.util.openUrl
 import app.roll.core.util.formatDayHeader
+import app.roll.data.feed.FeedLoad
+import app.roll.data.feed.NithNoticeTracker
 import app.roll.data.marks.MarkRepository
 import app.roll.data.preferences.UserPreferencesRepository
 import app.roll.data.schedule.ScheduleRepository
@@ -67,6 +70,8 @@ import app.roll.data.session.ClassContext
 import app.roll.data.session.ClassData
 import app.roll.domain.attendance.SessionState
 import app.roll.domain.deadlines.Deadlines
+import app.roll.domain.feed.NithFeed
+import app.roll.domain.feed.NithNotice
 import app.roll.domain.model.Mark
 import app.roll.domain.model.Notice
 import app.roll.feature.common.AttendanceCopy
@@ -80,6 +85,7 @@ import app.roll.feature.deadlines.DeadlineItem
 import app.roll.feature.deadlines.DeadlineRow
 import app.roll.feature.deadlines.deadlineItem
 import app.roll.feature.notices.PinnedNoticesBlock
+import app.roll.feature.notices.WebsiteNoticeRow
 import app.roll.feature.notices.pinnedNotices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,6 +112,13 @@ data class TodayUiState(
     val noCrClassName: String? = null,
     val dueSoon: List<DeadlineItem> = emptyList(),
     val pinnedNotices: List<Notice> = emptyList(),
+    val isCR: Boolean = false,
+    /** Any weekly slot at all: without one, classes only appear when the CR posts them by hand. */
+    val hasTimetable: Boolean = true,
+    /** The next open deadline after the "due soon" window, so an empty day still says what's coming. */
+    val nextDeadline: DeadlineItem? = null,
+    /** Latest academic and exam notices from nith.ac.in, shown when there are no classes. */
+    val latestNotices: List<NithNotice> = emptyList(),
 )
 
 @HiltViewModel
@@ -117,6 +130,7 @@ class TodayViewModel @Inject constructor(
     private val schedule: ScheduleRepository,
     private val messages: UserMessages,
     private val preferences: UserPreferencesRepository,
+    tracker: NithNoticeTracker,
 ) : ViewModel() {
 
     /** Whether the one-time notification explanation was answered. Starts true so it never flashes. */
@@ -155,6 +169,7 @@ class TodayViewModel @Inject constructor(
             yesterdayUnmarked = yesterday.count { it.state == SessionState.UnmarkedPast && it.editable },
             pendingSync = myMarks.hasPendingWrites,
             noCrClassName = ctx.rollClass.name.takeIf { ctx.rollClass.crUids.isEmpty() },
+            isCR = ctx.isCR,
             postedBy = latest?.let {
                 val posted = it.createdAt!!.atZone(ZoneId.of(tz)).toLocalTime()
                 "Posted by ${it.createdByName.ifBlank { "your CR" }} · ${formatClock(posted.hour * 60 + posted.minute, meridiem = true)}"
@@ -172,15 +187,40 @@ class TodayViewModel @Inject constructor(
         val zone = zoneOf(ctx.rollClass.timezone)
         val doneIds = done.orEmpty()
         val subjectMap = subjects.orEmpty().associateBy { it.id }
-        Deadlines.dueSoon(assignments.orEmpty(), doneIds, now).map { deadlineItem(it, subjectMap, doneIds, now, zone) }
+        val soon = Deadlines.dueSoon(assignments.orEmpty(), doneIds, now)
+        val next = if (soon.isNotEmpty()) {
+            null
+        } else {
+            assignments.orEmpty().filter { it.id !in doneIds && it.dueAt.isAfter(now) }.minByOrNull { it.dueAt }
+        }
+        soon.map { deadlineItem(it, subjectMap, doneIds, now, zone) } to next?.let { deadlineItem(it, subjectMap, doneIds, now, zone) }
+    }
+
+    private val extras = combine(classData.timetable, tracker.load) { slots, load ->
+        val notices = (load as? FeedLoad.Loaded)?.notices.orEmpty()
+        // Until the timetable has loaded, assume there is one: no "set up the timetable" flash.
+        (slots == null || slots.isNotEmpty()) to NithFeed.latestAcademic(notices)
     }
 
     private val pinned = combine(classData.classNotices, classData.collegeNotices, time.ticks()) { classList, collegeList, now ->
         pinnedNotices(classList.orEmpty(), collegeList.orEmpty(), now)
     }
 
-    val uiState: StateFlow<TodayUiState> = combine(content, refreshing, controller.cleared, dueSoon, pinned) { state, isRefreshing, cleared, soon, notices ->
-        state.copy(refreshing = isRefreshing, clearedMark = cleared, dueSoon = soon, pinnedNotices = notices)
+    val uiState: StateFlow<TodayUiState> = combine(
+        combine(content, refreshing, controller.cleared, ::Triple),
+        dueSoon,
+        pinned,
+        extras,
+    ) { (state, isRefreshing, cleared), (soon, next), notices, (hasTimetable, latest) ->
+        state.copy(
+            refreshing = isRefreshing,
+            clearedMark = cleared,
+            dueSoon = soon,
+            nextDeadline = next,
+            pinnedNotices = notices,
+            hasTimetable = hasTimetable,
+            latestNotices = latest,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
     fun onMark(item: SessionItem, mark: Mark?) {
@@ -192,6 +232,8 @@ class TodayViewModel @Inject constructor(
     }
 
     fun onUndoDismissed() = controller.dismiss()
+
+    fun cannotOpen() = messages.show("No app on this phone can open the link.")
 
     fun onRefresh() {
         val ctx = context.value ?: return
@@ -210,6 +252,8 @@ fun TodayRoute(
     onOpenDay: (LocalDate) -> Unit,
     onOpenAdmin: (() -> Unit)?,
     onOpenAssignment: (String) -> Unit,
+    onOpenTimetable: () -> Unit = {},
+    onOpenCollegeNotices: () -> Unit = {},
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -229,6 +273,9 @@ fun TodayRoute(
         onOpenDay = onOpenDay,
         onOpenAdmin = onOpenAdmin,
         onOpenAssignment = onOpenAssignment,
+        onOpenTimetable = onOpenTimetable,
+        onOpenCollegeNotices = onOpenCollegeNotices,
+        onOpenUrl = { if (!context.openUrl(it)) viewModel.cannotOpen() },
         showNotificationPrompt = needsPermission && !promptDone && !uiState.loading,
         onEnableNotifications = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -248,6 +295,9 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     onOpenAdmin: (() -> Unit)? = null,
     onOpenAssignment: (String) -> Unit = {},
+    onOpenTimetable: () -> Unit = {},
+    onOpenCollegeNotices: () -> Unit = {},
+    onOpenUrl: (String) -> Unit = {},
     showNotificationPrompt: Boolean = false,
     onEnableNotifications: () -> Unit = {},
     onDismissNotifications: () -> Unit = {},
@@ -311,12 +361,47 @@ fun TodayScreen(
                     uiState.loading -> item(key = "skeleton") {
                         SkeletonList(Modifier.background(colors.surface))
                     }
-                    uiState.items.isEmpty() -> item(key = "empty") {
-                        EmptyState(
-                            message = uiState.noCrClassName
-                                ?.let { "No CR yet for $it. Classes appear here once the admin appoints one." }
-                                ?: "No classes posted yet for today.",
-                        )
+                    uiState.items.isEmpty() -> {
+                        item(key = "empty") {
+                            val setUp = uiState.isCR && !uiState.hasTimetable
+                            EmptyState(
+                                message = when {
+                                    uiState.noCrClassName != null -> "Your class has no CR yet. The admin appoints one."
+                                    setUp -> "No classes today. Set up the timetable and each day's classes are ready to post."
+                                    !uiState.hasTimetable -> "Your CR hasn't set up the timetable yet."
+                                    else -> "No classes posted yet for today."
+                                },
+                                actionLabel = if (setUp) "Set up timetable" else null,
+                                onAction = if (setUp) onOpenTimetable else null,
+                            )
+                        }
+                        // Something useful on an empty day: what's due next and the college's latest.
+                        val next = uiState.nextDeadline
+                        if (next != null) {
+                            item(key = "nextHeader") { SectionHeader("Next deadline") }
+                            item(key = "next-${next.assignment.id}") {
+                                Column(Modifier.background(colors.surface)) {
+                                    DeadlineRow(item = next, onClick = { onOpenAssignment(next.assignment.id) }, onDoneChange = null)
+                                }
+                            }
+                        }
+                        if (uiState.latestNotices.isNotEmpty()) {
+                            item(key = "nithHeader") { SectionHeader("Latest from nith.ac.in") }
+                            itemsIndexed(uiState.latestNotices, key = { _, it -> "nith-${it.id}" }) { index, notice ->
+                                Column(Modifier.background(colors.surface)) {
+                                    if (index > 0) HairlineDivider(startIndent = Spacing.gutter)
+                                    WebsiteNoticeRow(notice, isNew = false, onClick = { onOpenUrl(notice.url) })
+                                }
+                            }
+                            item(key = "nithAll") {
+                                RollTextButton(
+                                    text = "All college notices",
+                                    onClick = onOpenCollegeNotices,
+                                    modifier = Modifier.padding(start = Spacing.gutter),
+                                    alignTextToStart = true,
+                                )
+                            }
+                        }
                     }
                     else -> {
                         itemsIndexed(uiState.items, key = { _, it -> it.session.id }) { index, item ->

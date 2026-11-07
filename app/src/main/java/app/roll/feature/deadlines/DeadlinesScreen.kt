@@ -227,7 +227,7 @@ fun DeadlinesScreen(
                         message = when {
                             uiState.filterSubjectId != null -> "Nothing for $filterName."
                             uiState.canPost -> "No deadlines yet. Add the first one with +."
-                            else -> "No deadlines yet. Your CR posts them here."
+                            else -> "No deadlines yet. Your CR posts assignments, tests and submissions here."
                         },
                     )
                 }

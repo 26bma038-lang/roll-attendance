@@ -223,7 +223,7 @@ fun DepartmentScreen(
                     )
                     Spacer(Modifier.height(Spacing.sm))
                     Text(
-                        text = if (rollClass.crNames.isEmpty()) "No CR yet" else "CR: ${rollClass.crNames.joinToString(", ")}",
+                        text = if (rollClass.crNames.isEmpty()) "No CR yet. The admin appoints one." else "CR: ${rollClass.crNames.joinToString(", ")}",
                         style = RollTheme.typography.body,
                         color = colors.ink,
                     )
@@ -258,11 +258,11 @@ fun DepartmentScreen(
             }
             item(key = "week") {
                 SectionHeader("This week")
-                WeekTimetable(uiState.slots, subjectMap, uiState.today)
+                WeekTimetable(uiState.slots, subjectMap, uiState.today, hasCR = rollClass.crUids.isNotEmpty())
             }
             item(key = "subjects") {
                 SectionHeader("Subjects")
-                SubjectsWithFaculty(uiState.subjects)
+                SubjectsWithFaculty(uiState.subjects, hasCR = rollClass.crUids.isNotEmpty())
             }
             item(key = "info") {
                 SectionHeader("Department")
@@ -296,10 +296,10 @@ fun DepartmentScreen(
 }
 
 @Composable
-private fun WeekTimetable(slots: List<TimetableSlot>, subjects: Map<String, Subject>, today: LocalDate) {
+private fun WeekTimetable(slots: List<TimetableSlot>, subjects: Map<String, Subject>, today: LocalDate, hasCR: Boolean) {
     val colors = RollTheme.colors
     if (slots.isEmpty()) {
-        NotAdded("No timetable yet. Your CR adds it.")
+        NotAdded(if (hasCR) "Your CR hasn't set up the timetable yet." else "No timetable yet. Your class needs a CR first; the admin appoints one.")
         return
     }
     ListGroup {
@@ -362,10 +362,10 @@ private fun WeekTimetable(slots: List<TimetableSlot>, subjects: Map<String, Subj
 }
 
 @Composable
-private fun SubjectsWithFaculty(subjects: List<Subject>) {
+private fun SubjectsWithFaculty(subjects: List<Subject>, hasCR: Boolean) {
     val colors = RollTheme.colors
     if (subjects.isEmpty()) {
-        NotAdded("No subjects yet. Your CR adds them.")
+        NotAdded(if (hasCR) "Your CR hasn't added the subjects yet." else "No subjects yet. Your class needs a CR first.")
         return
     }
     ListGroup {

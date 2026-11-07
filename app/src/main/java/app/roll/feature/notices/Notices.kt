@@ -154,7 +154,7 @@ fun NoticesSection(
     }
     if (notices.isEmpty()) {
         Text(
-            text = "No notices right now.",
+            text = if (canPost) "No notices right now. What you post shows here, and on Today when pinned." else "No notices right now. Your CR's and the admin's notices show up here.",
             style = RollTheme.typography.body,
             color = colors.inkSecondary,
             modifier = Modifier.padding(horizontal = Spacing.gutter, vertical = Spacing.sm),

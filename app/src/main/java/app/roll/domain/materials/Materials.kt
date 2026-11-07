@@ -1,6 +1,7 @@
 package app.roll.domain.materials
 
 import app.roll.domain.college.NithConfig
+import app.roll.domain.model.Subject
 import java.time.LocalDate
 
 /**
@@ -233,4 +234,30 @@ private object NaturalOrder : Comparator<String> {
         }
         return x.size.compareTo(y.size)
     }
+}
+
+/**
+ * Subjects a new first-year class can start with, taken from the study material: every subject
+ * code with its name, labs included (MA-111 Eng. Mathematics-1, PH-102 Eng. Physics LAB …).
+ */
+object FirstYearSubjects {
+    /** Colours cycle through the 8-colour palette in code order. */
+    private const val PALETTE_SIZE = 8
+
+    fun from(items: List<MaterialItem>): List<Subject> =
+        Study.subjects(items)
+            .filter { it.code != null }
+            .mapIndexed { index, subject ->
+                val code = subject.code!!
+                Subject(
+                    // Fixed ids: two CRs adding them at the same time end up with one set.
+                    id = "fy-" + code.lowercase(),
+                    name = subject.name.take(80),
+                    shortName = code.take(10),
+                    code = code,
+                    faculty = "",
+                    colorIndex = index % PALETTE_SIZE,
+                    archived = false,
+                )
+            }
 }

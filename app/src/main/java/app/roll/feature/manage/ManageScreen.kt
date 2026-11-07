@@ -1,5 +1,24 @@
 package app.roll.feature.manage
 
+import app.roll.feature.study.StudyMaterials
+import app.roll.feature.study.StudyStatus
+import app.roll.domain.materials.FirstYearSubjects
+import app.roll.domain.materials.Study
+import app.roll.core.designsystem.component.RollDialog
+import app.roll.core.designsystem.component.RollTextButton
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import app.roll.core.designsystem.theme.Sizes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -100,6 +119,11 @@ data class ManageUiState(
     val memberCount: Int = 0,
     val slotCount: Int = 0,
     val className: String = "",
+    /**
+     * First-year subjects from the study material, offered while a first-year class has no
+     * subjects at all. Empty otherwise.
+     */
+    val firstYearSubjects: List<Subject> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -112,9 +136,16 @@ class ManageViewModel @Inject constructor(
     time: TimeSource,
     private val schedule: ScheduleRepository,
     private val messages: UserMessages,
+    materials: StudyMaterials,
 ) : ViewModel() {
 
     private val context: StateFlow<ClassContext?> = session.context.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** What the study material says a first-year class studies (empty for other years). */
+    private val suggestedSubjects: Flow<List<Subject>> = combine(session.context, materials.data, time.ticks()) { ctx, data, now ->
+        val year = Study.yearOfStudy(ctx.rollClass.batch, now.localDateIn(ctx.rollClass.timezone))
+        if (year == 1 && data.status == StudyStatus.Ready) FirstYearSubjects.from(data.items) else emptyList()
+    }.distinctUntilChanged().onStart { emit(emptyList()) }
 
     private val members: Flow<List<Member>> = session.context
         .map { it.classId }
@@ -144,7 +175,7 @@ class ManageViewModel @Inject constructor(
         }
         .onStart { emit(emptyMap()) }
 
-    val uiState: StateFlow<ManageUiState> = combine(
+    private val base: Flow<ManageUiState> = combine(
         combine(session.context, classData.sessions, classData.subjects, classData.timetable, ::Quad),
         today,
         todaysSessions,
@@ -170,7 +201,20 @@ class ManageViewModel @Inject constructor(
             slotCount = timetable.orEmpty().size,
             className = ctx.rollClass.name,
         )
+    }
+
+    val uiState: StateFlow<ManageUiState> = combine(base, classData.subjects, suggestedSubjects) { state, subjects, suggested ->
+        // Offered only while the class has no subjects at all, archived ones included: once any
+        // subject exists the offer is gone for good.
+        state.copy(firstYearSubjects = if (subjects != null && subjects.isEmpty()) suggested else emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ManageUiState())
+
+    fun addFirstYearSubjects(chosen: List<Subject>) {
+        val ctx = context.value ?: return
+        if (!ctx.isCR || chosen.isEmpty()) return
+        chosen.forEach { schedule.saveSubject(ctx.classId, it) }
+        messages.show("Added ${if (chosen.size == 1) "1 subject" else "${chosen.size} subjects"}. Edit them in Subjects.")
+    }
 
     fun postFromTimetable() {
         val ctx = context.value ?: return
@@ -207,6 +251,7 @@ fun ManageRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ManageScreen(
         uiState = uiState,
+        onAddFirstYearSubjects = viewModel::addFirstYearSubjects,
         onPostFromTimetable = viewModel::postFromTimetable,
         onAddClass = viewModel::addClass,
         onOpenSession = onOpenSession,
@@ -228,9 +273,11 @@ fun ManageScreen(
     onOpenClassSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddFirstYearSubjects: (List<Subject>) -> Unit = {},
 ) {
     val colors = RollTheme.colors
     var adding by rememberSaveable { mutableStateOf(false) }
+    var offeringSubjects by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier.fillMaxSize()) {
         RollTopAppBar(title = "Manage") {
@@ -241,6 +288,11 @@ fun ManageScreen(
             )
         }
         LazyColumn(contentPadding = PaddingValues(bottom = Spacing.xxl), modifier = Modifier.fillMaxSize()) {
+            if (uiState.firstYearSubjects.isNotEmpty()) {
+                item(key = "firstYear") {
+                    FirstYearOffer(count = uiState.firstYearSubjects.size, onReview = { offeringSubjects = true })
+                }
+            }
             item(key = "todayHeader") { SectionHeader("Today's classes") }
             when {
                 uiState.loading -> item { SkeletonList(Modifier.background(colors.surface), rows = 3, showTrailing = false) }
@@ -299,6 +351,16 @@ fun ManageScreen(
         }
     }
 
+    if (offeringSubjects && uiState.firstYearSubjects.isNotEmpty()) {
+        FirstYearSubjectsDialog(
+            subjects = uiState.firstYearSubjects,
+            onAdd = {
+                onAddFirstYearSubjects(it)
+                offeringSubjects = false
+            },
+            onDismiss = { offeringSubjects = false },
+        )
+    }
     if (adding) {
         RollBottomSheet(onDismiss = { adding = false }) {
             SessionEditor(
@@ -352,4 +414,67 @@ private fun ManagedSessionRow(managed: ManagedSession, onClick: () -> Unit) {
             }
         },
     )
+}
+
+/** The quiet offer at the top of Manage while a first-year class has no subjects. */
+@Composable
+private fun FirstYearOffer(count: Int, onReview: () -> Unit) {
+    val colors = RollTheme.colors
+    Column(Modifier.padding(start = Spacing.gutter, end = Spacing.gutter, top = Spacing.sm)) {
+        Text(
+            text = "Your class has no subjects yet. The first-year study material lists $count, with their codes.",
+            style = RollTheme.typography.body,
+            color = colors.ink,
+        )
+        RollTextButton(text = "Review first-year subjects", onClick = onReview, alignTextToStart = true)
+    }
+}
+
+/** "Add the 20 first-year subjects?" with every subject ticked; the CR unticks what doesn't apply. */
+@Composable
+private fun FirstYearSubjectsDialog(
+    subjects: List<Subject>,
+    onAdd: (List<Subject>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = RollTheme.colors
+    var unticked by rememberSaveable { mutableStateOf(setOf<String>()) }
+    val chosen = subjects.filter { it.id !in unticked }
+    RollDialog(
+        title = "Add the ${subjects.size} first-year subjects?",
+        text = "Untick any your class doesn't take. You can rename, edit or remove them later in Subjects.",
+        confirmLabel = if (chosen.size == 1) "Add 1" else "Add ${chosen.size}",
+        confirmEnabled = chosen.isNotEmpty(),
+        dismissLabel = "Not now",
+        onConfirm = { onAdd(chosen) },
+        onDismiss = onDismiss,
+    ) {
+        Column(
+            Modifier
+                .heightIn(max = 320.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            subjects.forEach { subject ->
+                val checked = subject.id !in unticked
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = Sizes.minTouchTarget)
+                        .toggleable(value = checked, role = Role.Checkbox) {
+                            unticked = if (it) unticked - subject.id else unticked + subject.id
+                        },
+                ) {
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = null,
+                        colors = CheckboxDefaults.colors(checkedColor = colors.ink, uncheckedColor = colors.inkSecondary, checkmarkColor = colors.surface),
+                    )
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text(text = subject.code, style = RollTheme.typography.rollNo, color = colors.ink, modifier = Modifier.widthIn(min = 64.dp))
+                    Text(text = subject.name, style = RollTheme.typography.body, color = colors.ink)
+                }
+            }
+        }
+    }
 }

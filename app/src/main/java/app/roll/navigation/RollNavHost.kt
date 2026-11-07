@@ -199,6 +199,8 @@ private fun MainTabs(
                     onOpenDay = openDay,
                     onOpenAdmin = if (isAdmin) ({ navController.navigate(AdminDest) }) else null,
                     onOpenAssignment = openAssignment,
+                    onOpenTimetable = { navController.navigate(TimetableDest) },
+                    onOpenCollegeNotices = { navController.navigate(CollegeNoticesDest) },
                 )
                 Tab.Deadlines -> DeadlinesRoute(onOpenAssignment = openAssignment, onOpenSettings = openSettings)
                 Tab.Subjects -> SubjectsRoute(

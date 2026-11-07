@@ -5,12 +5,27 @@ Roll puts you in your batch and branch's class automatically. CRs, appointed by 
 day's classes, assignments and notices. Students mark themselves present or absent and see how many
 classes they can still miss. It's a self-tracking tool for students, not an official record.
 
-The original brief is `attendance-app-prompt.md`; the v2 NITH upgrade brief is `docs/nith-upgrade-prompt.md`.
+The original brief is `attendance-app-prompt.md`; the v2 NITH upgrade brief is `docs/nith-upgrade-prompt.md`;
+v2.1 (study material) is `docs/study-material-prompt.md` and v2.2 is `docs/v2.2-prompt.md`.
+
+**What's in v2.2.0**
+
+- **Study** tab for every first-year student, whatever the branch: notes, books, practical files,
+  assignments, solutions and previous year papers from a senior's Google Classroom (credited in
+  the app), copied daily by a GitHub Actions job.
+- **College notices** for everyone: the admin's notices plus academic, exam and student notices
+  from nith.ac.in, checked every 3 hours, with "New" marks and a dot on the Department tab.
+- **No blank screens**: every empty screen says why and what to do; Today on a day without
+  classes shows the next deadline and the latest college notices; a new first-year class can add
+  its subjects from the study material in one step.
+- **Timetable from the college's PDF** (admin tool): extracted with Gemini's free tier into a
+  draft you check, then written as subjects and weekly slots.
 
 ## Download
 
-[**Roll-1.0.0.apk**](download/Roll-1.0.0.apk) is the v1 build (no Firebase connected). For v2, build
-your own APK after the Firebase setup below. To install an APK, allow "Install unknown apps" for your
+[**Roll-1.0.0.apk**](download/Roll-1.0.0.apk) is the v1 build (no Firebase connected). For v2.x, build
+your own APK after the Firebase setup below (`.\gradlew assembleRelease`); releases are not
+committed. To install an APK, allow "Install unknown apps" for your
 browser or file manager when Android asks.
 
 Kotlin · Jetpack Compose (Material 3, heavily customised) · MVVM + StateFlow · Hilt · Navigation
@@ -67,6 +82,8 @@ notices/{nid}                  college notice: text, pinned, createdAt, expiresA
 materialSources/{id}           study material index from a senior's Classroom: title, credit, classroomUrl,
                                years[], branches[], items[], syncedAt   (written only by tools/classroom-sync)
   parts/{n}                    items[] when a source outgrows one document
+collegeFeed/nith               notices from nith.ac.in: items[] (id, title, url, category, sortDate,
+                               monthLabel?, firstSeenAt), seen{}, syncedAt   (written only by tools/nith-notices)
 classes/{nith-26-ma}           name, semester, batch, branch, crUids[], crNames[], requiredPercent,
                                timezone, memberCount, createdAt
   members/{uid}                name, rollNo, joinedAt          (read by CRs and the admin only)
@@ -99,6 +116,7 @@ collections and too expensive for growing ones, so:
 | `assignmentStatus`, `subjects`, `timetable`, `departments`, class doc | Plain listener | Tens of small docs |
 | `members` | Plain listener, CRs and the admin only | One screen, few users |
 | `materialSources` | Plain listener on `branches` array-contains-any [branch, `"*"`], year filtered on the phone | One doc per Classroom course, rewritten only when the course changes |
+| `collegeFeed/nith` | Plain listener on one document | Rewritten at most every 3 hours, only when the website changed |
 
 ### On-device only (no server)
 
@@ -109,6 +127,23 @@ collections and too expensive for growing ones, so:
   posted, in the app and by a 6:00 daily job. Inexact timing; no exact-alarm permission.
 - **Daily reminder** at a chosen time if today has unmarked classes.
 - **Home-screen widget** (Glance): today's classes with P / A, and the next deadline.
+- **"New" college notices**: the time College notices was last opened is kept on the phone only.
+  There are no push notifications (no Firebase Cloud Messaging).
+
+### Jobs that run elsewhere (all free)
+
+Nothing runs on Firebase's servers (no Cloud Functions on Spark). Scheduled work runs on GitHub
+Actions with the Firebase Admin SDK, and admin tools run on a laptop:
+
+| Tool | What | Runs | Guide |
+| --- | --- | --- | --- |
+| `tools/classroom-sync` | Study material index from the senior's Classroom → `materialSources` | Daily 06:00 IST (`.github/workflows/classroom-sync.yml`) | `tools/classroom-sync/README.md` |
+| `tools/nith-notices` | Academic notices from nith.ac.in → `collegeFeed/nith` | Every 3 h, 08:00–20:00 IST (`.github/workflows/nith-notices.yml`) | `tools/nith-notices/README.md` |
+| `tools/timetable-import` | College timetable PDF → subjects and weekly slots (Gemini free tier) | By hand, by the admin | `tools/timetable-import/README.md` |
+
+Repository secrets (Settings → Secrets and variables → Actions): `GOOGLE_OAUTH_CLIENT`,
+`GOOGLE_REFRESH_TOKEN`, `FIREBASE_SERVICE_ACCOUNT`. Local keys live in each tool's git-ignored
+`.secrets/` folder. A failing job emails the repo owner.
 
 ## 4. Firebase setup and rules deploy
 
@@ -144,7 +179,8 @@ $env:JAVA_HOME = "$env:LOCALAPPDATA\Android\jdk\jdk-21.0.13+9"
 | Unit tests (+ screenshots) | `.\gradlew testDebugUnitTest` | `app\build\reports\tests\` |
 | Record screenshots | `.\gradlew recordRoborazziDebug` | `app\build\outputs\roborazzi\` |
 | Lint | `.\gradlew lintDebug` | `app\build\reports\lint-results-debug.html` |
-| Security rules tests | `cd rules-tests; npm test` | starts the Firestore emulator |
+| Security rules tests | `cd rules-tests; npm test` | starts the Firestore emulator (needs JDK 21 on PATH) |
+| Tool tests | `cd tools/<tool>; npm test` | classroom-sync, nith-notices, timetable-import |
 
 Release builds are minified with R8 (`app/proguard-rules.pro`) and signed with
 `keystore/roll-release.jks` (passwords in `keystore.properties`). Both are git-ignored: **back them
@@ -159,12 +195,14 @@ app/src/main/java/app/roll/
   core/common, util/   dispatchers, time source, snackbar messages, formatting, links
   data/                Firebase repositories, mappers, delta sync, app session, preferences
   domain/              pure Kotlin: NithConfig, attendance maths, deadlines, leave planner,
-                       class-end planning, timetable posting
+                       class-end planning, timetable posting, study material, NITH notices
   feature/             auth, onboarding, today, deadlines, subjects (incl. leave planner),
-                       history, department, notices, manage, admin, settings, classend, widget
+                       history, study, department, notices, manage, admin, settings, classend, widget
   navigation/          type-safe routes and the main tab scaffold
 app/src/debug/         design-system gallery (debug only, used by screenshot tests)
 rules-tests/           Firestore rules tests (Node, @firebase/rules-unit-testing, emulator)
+tools/                 Node jobs and admin tools (see "Jobs that run elsewhere")
+.github/workflows/     the two scheduled syncs
 ```
 
 ## Licences
